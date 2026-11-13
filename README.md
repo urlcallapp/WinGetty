@@ -188,10 +188,13 @@ license, homepage and other links, tags, release notes and installation
 notes. This metadata comes from the app's winget YAML manifest
 (defaultLocale and version fields such as `Description`, `Author`,
 `License`, `PackageUrl`, `Tags`, `ReleaseNotes`); the importer and the
-REST API store it on the version when the YAML provides it. Manifest
-metadata is sanitized on intake - unknown fields are dropped and only
-`http(s)` URLs survive - and the details view shows whatever the manifest
-actually provided, nothing invented.
+REST API store it on the version when the YAML provides it. Re-importing
+a package with richer YAML fills in details on versions that are missing
+them (existing values are never overwritten), so catalogs created before
+this feature gain details on the next import. Manifest metadata is
+sanitized on intake - unknown fields are dropped and only `http(s)` URLs
+survive - and the details view shows whatever the manifest actually
+provided, nothing invented.
 
 Settings: `Enable user catalog`, `Catalog requires login`,
 `Catalog source name`, `Catalog install links`.

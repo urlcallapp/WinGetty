@@ -370,6 +370,46 @@ def add_version(identifier):
     return redirect(request.referrer or url_for("ui.package", identifier=identifier))
 
 
+@api.route("/package/<identifier>/version/<version_code>/details", methods=["POST"])
+@login_required
+@permission_required("edit:version")
+def update_version_details(identifier, version_code):
+    """Merge catalog details into an existing version.
+
+    Used by the importer on re-runs: versions created before details
+    support (or from bare-bones manifests) get enriched from newer YAML
+    without touching keys that are already set. Only keys missing (or
+    empty) on the stored version are filled; existing values win.
+    """
+    package = Package.query.filter_by(identifier=identifier).first()
+    if package is None:
+        return "Package not found", 404
+    version = PackageVersion.query.filter_by(
+        identifier=identifier, version_code=version_code
+    ).first()
+    if version is None:
+        return "Package version not found", 404
+
+    try:
+        incoming = sanitize_version_details(json.loads(request.form.get("details", "")))
+    except json.JSONDecodeError:
+        return jsonify({"error": "invalid details: not valid JSON"}), 400
+    if not incoming:
+        return jsonify({"error": "no usable details provided"}), 400
+
+    merged = dict(version.details or {})
+    added = []
+    for key, value in incoming.items():
+        if not merged.get(key):
+            merged[key] = value
+            added.append(key)
+    if added:
+        version.details = merged
+        db.session.commit()
+
+    return jsonify({"updated": bool(added), "added_keys": added})
+
+
 @api.route("/package/<identifier>/add_installer", methods=["POST"])
 @login_required
 @permission_required("add:installer")

@@ -364,3 +364,156 @@ def test_manifest_hash_still_verified_with_details(app, tmp_path):
         backend.close()
     assert report["summary"]["added"] == 1
     assert report["summary"]["errors"] == 0
+
+
+# --- re-import enrichment ------------------------------------------------------
+
+
+def _write_drop(tmp_path, with_details):
+    file_name, _digest = _make_drop(tmp_path)
+    manifest_path = next(tmp_path.glob("*.yaml"))
+    text = manifest_path.read_text()
+    if with_details:
+        text = text.replace(
+            "  ShortDescription: Contoso demo application\n",
+            "  ShortDescription: Contoso demo application\n"
+            "  Description: Added on re-import\n"
+            "  License: MIT\n"
+            "  PackageUrl: https://contoso.example.com/app\n",
+        )
+        manifest_path.write_text(text)
+    return manifest_path
+
+
+def test_reimport_enriches_existing_version(app, tmp_path):
+    """A version imported without details gains them on re-import."""
+    from wingetty_import.importer import LocalBackend, run_import
+
+    _write_drop(tmp_path, with_details=False)
+    backend = LocalBackend()
+    try:
+        first = run_import(str(tmp_path), backend)
+        assert first["summary"]["added"] == 1
+        with app.app_context():
+            version = PackageVersion.query.filter_by(
+                identifier="Contoso.App", version_code="1.2.3"
+            ).one()
+            assert not version.details
+
+        _write_drop(tmp_path, with_details=True)
+        second = run_import(str(tmp_path), backend)
+    finally:
+        backend.close()
+
+    assert second["summary"]["errors"] == 0
+    assert second["summary"]["enriched"] == 1
+    # The installer itself is still skipped, not duplicated.
+    assert second["summary"]["added"] == 0
+    assert second["summary"]["skipped"] == 1
+
+    with app.app_context():
+        version = PackageVersion.query.filter_by(
+            identifier="Contoso.App", version_code="1.2.3"
+        ).one()
+        assert version.details["description"] == "Added on re-import"
+        assert version.details["license"] == "MIT"
+        assert version.details["homepage"] == "https://contoso.example.com/app"
+
+
+def test_reimport_does_not_overwrite_existing_details(app, tmp_path):
+    """Keys already stored on the version survive a re-import."""
+    from wingetty_import.importer import LocalBackend, run_import
+
+    _write_drop(tmp_path, with_details=True)
+    backend = LocalBackend()
+    try:
+        run_import(str(tmp_path), backend)
+        with app.app_context():
+            version = PackageVersion.query.filter_by(
+                identifier="Contoso.App", version_code="1.2.3"
+            ).one()
+            version.details = {"license": "Proprietary", "author": "Contoso"}
+            db.session.commit()
+
+        second = run_import(str(tmp_path), backend)
+    finally:
+        backend.close()
+
+    assert second["summary"]["enriched"] == 1  # fills the missing keys only
+    with app.app_context():
+        version = PackageVersion.query.filter_by(
+            identifier="Contoso.App", version_code="1.2.3"
+        ).one()
+        assert version.details["license"] == "Proprietary"
+        assert version.details["author"] == "Contoso"
+        assert version.details["description"] == "Added on re-import"
+
+
+def test_update_version_details_route_merges(admin_client, app):
+    admin_client.post(
+        "/api/add_package",
+        data={
+            "name": "Merge App",
+            "publisher": "MergePublisher",
+            "identifier": "Merge.App",
+        },
+    )
+    admin_client.post(
+        "/api/package/Merge.App/add_version",
+        data={
+            "installer-version": "4.0",
+            "details": json.dumps({"License": "MIT"}),
+        },
+    )
+    resp = admin_client.post(
+        "/api/package/Merge.App/version/4.0/details",
+        data={
+            "details": json.dumps(
+                {
+                    "License": "Apache-2.0",  # existing key wins
+                    "Description": "filled in later",
+                    "PackageUrl": "https://merge.example.com",
+                }
+            )
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["updated"] is True
+    assert set(body["added_keys"]) == {"description", "homepage"}
+
+    with app.app_context():
+        version = PackageVersion.query.filter_by(
+            identifier="Merge.App", version_code="4.0"
+        ).one()
+        assert version.details["license"] == "MIT"
+        assert version.details["description"] == "filled in later"
+
+
+def test_update_version_details_route_rejects_bad_input(admin_client):
+    admin_client.post(
+        "/api/add_package",
+        data={
+            "name": "Guard App",
+            "publisher": "GuardPublisher",
+            "identifier": "Guard.App",
+        },
+    )
+    admin_client.post(
+        "/api/package/Guard.App/add_version", data={"installer-version": "1.0"}
+    )
+    resp = admin_client.post(
+        "/api/package/Guard.App/version/1.0/details",
+        data={"details": "{broken"},
+    )
+    assert resp.status_code == 400
+    resp = admin_client.post(
+        "/api/package/Guard.App/version/1.0/details",
+        data={"details": json.dumps({"UnknownKey": "x"})},
+    )
+    assert resp.status_code == 400
+    resp = admin_client.post(
+        "/api/package/Guard.App/version/9.9/details",
+        data={"details": json.dumps({"License": "MIT"})},
+    )
+    assert resp.status_code == 404

@@ -53,8 +53,24 @@ class FakeBackend:
 
     def create_version(self, pkg):
         self.packages[pkg.identifier]["versions"].append(
-            {"version_code": pkg.version, "installers": []}
+            {
+                "version_code": pkg.version,
+                "details": dict(pkg.details),
+                "installers": [],
+            }
         )
+
+    def update_version_details(self, pkg):
+        for version in self.packages[pkg.identifier]["versions"]:
+            if version["version_code"] == pkg.version:
+                merged = version.setdefault("details", {})
+                added = []
+                for key, value in pkg.details.items():
+                    if not merged.get(key):
+                        merged[key] = value
+                        added.append(key)
+                return added
+        return []
 
     def create_installer(self, pkg, installer, file_path):
         for version in self.packages[pkg.identifier]["versions"]:
@@ -87,11 +103,11 @@ def test_import_adds_and_skips_on_second_run(tmp_path):
     backend = FakeBackend()
 
     first = run_import(str(tmp_path), backend)
-    assert first["summary"] == {"added": 1, "skipped": 0, "errors": 0}
+    assert first["summary"] == {"added": 1, "skipped": 0, "enriched": 0, "errors": 0}
     assert first["items"][0]["status"] == "added"
 
     second = run_import(str(tmp_path), backend)
-    assert second["summary"] == {"added": 0, "skipped": 1, "errors": 0}
+    assert second["summary"] == {"added": 0, "skipped": 1, "enriched": 0, "errors": 0}
     assert second["items"][0]["detail"] == "already present"
 
 

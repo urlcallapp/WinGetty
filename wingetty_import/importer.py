@@ -160,6 +160,7 @@ class LocalBackend:
             "versions": [
                 {
                     "version_code": version.version_code,
+                    "details": version.details or {},
                     "installers": [
                         {"architecture": i.architecture, "scope": i.scope}
                         for i in version.installers
@@ -192,6 +193,27 @@ class LocalBackend:
             version.details = pkg.details
         self.db.session.add(version)
         self.db.session.commit()
+
+    def update_version_details(self, pkg: ImportPackage):
+        """Fill missing detail keys on an existing version. Returns the
+        list of keys that were added (empty when nothing changed)."""
+        from app.models import PackageVersion
+
+        version = PackageVersion.query.filter_by(
+            identifier=pkg.identifier, version_code=pkg.version
+        ).first()
+        if version is None or not pkg.details:
+            return []
+        merged = dict(version.details or {})
+        added = []
+        for key, value in pkg.details.items():
+            if not merged.get(key):
+                merged[key] = value
+                added.append(key)
+        if added:
+            version.details = merged
+            self.db.session.commit()
+        return added
 
     def create_installer(self, pkg: ImportPackage, installer, file_path):
         from app.models import (
@@ -334,6 +356,18 @@ class ApiBackend:
             return
         resp.raise_for_status()
 
+    def update_version_details(self, pkg: ImportPackage):
+        """Fill missing detail keys on an existing version via the API."""
+        if not pkg.details:
+            return []
+        resp = self.session.post(
+            f"{self.base_url}/api/package/{pkg.identifier}/version/"
+            f"{pkg.version}/details",
+            data={"details": json.dumps(pkg.details)},
+        )
+        resp.raise_for_status()
+        return resp.json().get("added_keys", [])
+
     def create_installer(self, pkg: ImportPackage, installer, file_path):
         data = {
             "installer-version": pkg.version,
@@ -388,7 +422,7 @@ def run_import(drop_dir, backend, dry_run=False, report_path=None):
     report = {
         "drop_dir": os.path.abspath(drop_dir),
         "dry_run": dry_run,
-        "summary": {"added": 0, "skipped": 0, "errors": 0},
+        "summary": {"added": 0, "skipped": 0, "enriched": 0, "errors": 0},
         "items": [],
     }
 
@@ -396,6 +430,54 @@ def run_import(drop_dir, backend, dry_run=False, report_path=None):
     report["items"].extend(scan_errors)
 
     for pkg, file_map in items:
+        existing = backend.get_package(pkg.identifier)
+
+        # Re-imports enrich versions that already exist but are missing
+        # catalog details (for example versions created before details
+        # support, or from bare-bones manifests): fill in the keys the
+        # newer YAML provides instead of skipping the package outright.
+        # Existing keys always win - a re-import never overwrites them.
+        if existing is not None and pkg.details:
+            existing_version = next(
+                (
+                    v
+                    for v in existing.get("versions", [])
+                    if v.get("version_code") == pkg.version
+                ),
+                None,
+            )
+            if existing_version is not None:
+                missing = [
+                    key
+                    for key in pkg.details
+                    if not (existing_version.get("details") or {}).get(key)
+                ]
+                if missing:
+                    entry = {"identifier": pkg.identifier, "version": pkg.version}
+                    if dry_run:
+                        entry.update(
+                            status="enriched",
+                            detail="dry run",
+                            added_keys=missing,
+                        )
+                    else:
+                        try:
+                            added = backend.update_version_details(pkg)
+                        except Exception as e:  # report and keep importing
+                            entry.update(status="error", detail=str(e))
+                        else:
+                            if added:
+                                entry.update(
+                                    status="enriched",
+                                    detail="details added: " + ", ".join(added),
+                                )
+                            else:
+                                entry.update(
+                                    status="skipped",
+                                    detail="details already complete",
+                                )
+                    report["items"].append(entry)
+
         for index, installer in enumerate(pkg.installers):
             label = f"{pkg.identifier} {pkg.version} {installer.architecture}/{installer.scope}"
             entry = {
@@ -423,7 +505,6 @@ def run_import(drop_dir, backend, dry_run=False, report_path=None):
                 report["items"].append(entry)
                 continue
 
-            existing = backend.get_package(pkg.identifier)
             if existing and _installer_exists(existing, pkg.version, installer):
                 entry.update(status="skipped", detail="already present")
                 report["items"].append(entry)
@@ -455,6 +536,7 @@ def run_import(drop_dir, backend, dry_run=False, report_path=None):
         key = {
             "added": "added",
             "skipped": "skipped",
+            "enriched": "enriched",
             "error": "errors",
         }[item["status"]]
         report["summary"][key] += 1
@@ -471,7 +553,7 @@ def print_summary(report):
     print(
         f"Import of {report['drop_dir']}: "
         f"{summary['added']} added, {summary['skipped']} skipped, "
-        f"{summary['errors']} errors"
+        f"{summary['enriched']} enriched, {summary['errors']} errors"
     )
     for item in report["items"]:
         if item["status"] == "error":
