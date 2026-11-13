@@ -410,13 +410,29 @@ def add_installer(identifier):
             409,
         )
 
-    # Optional installer switches, same fields the edit flow accepts
-    # (constants.installer_switches). Without this, API-created installers
-    # silently lost switches that the UI edit flow could set afterwards.
-    switch_values = {}
-    for field_name in installer_switches:
-        if field_name in request.form and request.form.get(field_name) != "":
-            switch_values[field_name] = request.form.get(field_name)
+    # S3 deployments serve downloads from the bucket, but file uploads are
+    # stored on local disk. Persisting here would create an installer record
+    # whose downloads always fail, so reject the upload explicitly instead.
+    if installer_form.file.data and Setting.get("USE_S3").get_value():
+        current_app.logger.warning(
+            "Installer file upload rejected: USE_S3 is enabled"
+        )
+        return (
+            jsonify(
+                {
+                    "error": "Installer file upload is not supported while S3 "
+                    "storage (USE_S3) is enabled: uploaded files are stored on "
+                    "local disk but downloads are served from S3. Host the "
+                    "installer in the bucket and register it via the S3 "
+                    "workflow instead."
+                }
+            ),
+            400,
+        )
+
+    # Optional installer switches are persisted by create_installer()
+    # (it reads the same constants.installer_switches fields from
+    # request.form), so this route must not append them again.
 
     # Optional Dependencies, sent as a JSON string and validated against
     # the winget manifest schema subset before it is stored.
@@ -438,10 +454,6 @@ def add_installer(identifier):
         current_app.logger.warning(f"Error creating installer: {e}")
         return jsonify({"error": str(e)}), 400
 
-    for parameter, value in switch_values.items():
-        installer.switches.append(
-            InstallerSwitch(parameter=parameter, value=value)
-        )
     if dependencies is not None:
         installer.dependencies = dependencies
 

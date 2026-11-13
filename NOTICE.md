@@ -34,8 +34,14 @@ New components added:
 - Installer `Dependencies` support end to end: JSON column (migration
   c4d9e2f1a830), schema validation
   (`wingetty_import/dependencies_schema.py`), API intake, manifest
-  emission. `add_installer` now also persists installer switches at
-  creation time (previously only the UI edit flow could set them).
+  emission. Installer switches at creation time are persisted by the
+  existing `create_installer()` helper; the `add_installer` route relies
+  on it (an earlier revision of this fork appended them twice, which was
+  caught by tests and removed).
+- S3 safety guards: the REST `add_installer` file-upload path and the
+  local importer backend fail explicitly with a clear error when USE_S3
+  is enabled, instead of writing local files that S3 deployments cannot
+  serve.
 - `client/WinGettyProtocol.Common.ps1` + `client/Test-WinGettyProtocol.ps1`
   - headless protocol-handler tests (parsing, validation, source pinning,
   HKCU registration roundtrip) running on Windows CI.
@@ -63,4 +69,5 @@ Upstream files modified (each carries a dated header notice):
 - `app/templates/nav.j2` - catalog navigation link.
 - `app/templates/footer.j2` - source-offer link.
 - `Dockerfile` - copies `wingetty_import/`, builds source archive.
-- `README.md` - documentation for the new components.
+- `README.md` - documentation for the new components and a safe
+  backup-and-upgrade path for existing deployments.

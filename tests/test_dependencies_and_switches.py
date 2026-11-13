@@ -24,7 +24,8 @@ from wingetty_import.dependencies_schema import (
 )
 from wingetty_import.manifest import parse_manifest_documents
 
-from app.models import Installer
+from app import db
+from app.models import Installer, Setting
 
 from test_api import EXE_BYTES, _add_package, _add_version, _add_installer
 
@@ -134,6 +135,9 @@ def test_add_installer_persists_switches_and_dependencies(admin_client, app):
 
     with app.app_context():
         installer = Installer.query.one()
+        # Exactly one row per switch: create_installer() persists them, and
+        # the add_installer route must not append a second copy.
+        assert len(installer.switches) == 2
         switches = {s.parameter: s.value for s in installer.switches}
         assert switches["Silent"] == "/quiet"
         assert switches["Custom"] == "/norestart"
@@ -145,6 +149,24 @@ def test_add_installer_persists_switches_and_dependencies(admin_client, app):
     assert entry["InstallerSwitches"]["Silent"] == "/quiet"
     assert entry["InstallerSwitches"]["Custom"] == "/norestart"
     assert entry["Dependencies"] == DEPS
+
+
+def test_add_installer_file_upload_rejected_under_s3(admin_client, app):
+    """S3 deployments serve downloads from the bucket, so a local-disk file
+    upload must fail explicitly instead of creating an unservable record."""
+    _add_package(admin_client)
+    _add_version(admin_client, "Test.App", "1.0")
+    with app.app_context():
+        setting = Setting.get("USE_S3")
+        setting.value = "True"
+        db.session.commit()
+
+    resp = _add_installer_full(admin_client, "Test.App", "1.0")
+    assert resp.status_code == 400
+    assert "USE_S3" in resp.get_json()["error"]
+
+    with app.app_context():
+        assert Installer.query.count() == 0
 
 
 def test_add_installer_rejects_invalid_dependencies(admin_client):

@@ -128,6 +128,20 @@ class LocalBackend:
         self.app_context.push()
         self.db = db
 
+        # The importer stores installer files on local disk. Deployments
+        # configured to serve downloads from S3 (USE_S3) would accept the
+        # import but then fail every download, so refuse up front instead.
+        from app.models import Setting
+
+        use_s3 = Setting.get("USE_S3")
+        if use_s3 is not None and use_s3.get_value():
+            self.app_context.pop()
+            raise RuntimeError(
+                "WinGetty is configured to serve installers from S3 (USE_S3), "
+                "but the local importer stores files on local disk, which S3 "
+                "deployments cannot serve. Disable USE_S3 before importing."
+            )
+
     def close(self):
         self.app_context.pop()
 

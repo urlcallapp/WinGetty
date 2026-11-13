@@ -71,6 +71,15 @@ If you're running WinGetty on a remote server, replace localhost with the approp
 > ⚠️ **Note**: WinGet requires HTTPS for secure communication and without it WinGet will throw an error. It is recommended to put WinGetty behind a reverse proxy with a client-trusted SSL/TLS certificate.  
 By using a reverse proxy with HTTPS, you can ensure secure transmission of data between clients and WinGetty. Popular reverse proxy solutions include NGINX, Apache, and Caddy. Please refer to the documentation of your chosen reverse proxy for detailed instructions on configuring SSL/TLS certificates.
 
+### ⬆️ Upgrading an existing deployment
+WinGetty manages its schema with database migrations, and the container applies them automatically on start (`start.sh` runs `flask db upgrade`). To upgrade safely:
+
+1. Back up the database first. For the default SQLite setup, copy the database file (and the `packages/` directory) while the container is stopped; for MySQL/PostgreSQL, take a dump with your usual tooling.
+2. Pull the new image and start the container. The migration runs automatically and only applies the changes since your current version - existing packages, versions, installers, users and settings are preserved.
+3. If the container fails to start after an upgrade, restore the backup and report the migration error as an issue.
+
+> ⚠️ **Note**: The migration chain expects a database that was created and maintained through `flask db upgrade` (as the container does). If you ever created the schema through the application models directly (`db.create_all()`) without running the migrations, the upgrade chain cannot apply to it - export and re-import your packages instead, or ask for help in an issue before upgrading.
+
 ### 🪄 Using WinGetty
 
 You can test the WinGet API by opening `http://localhost:8080/wg/information` in a browser or with `curl` / `Invoke-RestMethod`.

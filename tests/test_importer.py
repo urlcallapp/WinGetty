@@ -1,6 +1,8 @@
 import hashlib
 import os
 
+import pytest
+
 from wingetty_import.importer import run_import, scan_drop_dir, sha256_file
 
 
@@ -132,6 +134,52 @@ def test_hash_matching_fallback_without_url_name(tmp_path):
     report = run_import(str(tmp_path), backend)
     assert report["summary"]["errors"] == 0
     assert report["summary"]["added"] == 1
+
+
+def test_local_backend_persists_each_switch_once(app, tmp_path):
+    """The local backend writes exactly one InstallerSwitch row per switch
+    (the API route had a duplicate-append regression; pin both paths)."""
+    from app.models import Installer
+    from wingetty_import.importer import LocalBackend
+
+    file_name, _ = _make_drop(tmp_path)
+    # Add a switch to the manifest
+    manifest = tmp_path / "Contoso.App.x64.yaml"
+    manifest.write_text(
+        manifest.read_text().replace(
+            "  Scope: machine",
+            "  Scope: machine\n  InstallerSwitches:\n    Silent: /qn",
+        )
+    )
+
+    backend = LocalBackend()
+    try:
+        report = run_import(str(tmp_path), backend)
+    finally:
+        backend.close()
+    assert report["summary"]["added"] == 1, report
+
+    with app.app_context():
+        installer = Installer.query.one()
+        assert len(installer.switches) == 1
+        assert installer.switches[0].parameter == "Silent"
+        assert installer.switches[0].value == "/qn"
+
+
+def test_local_backend_refuses_s3_mode(app):
+    """Under USE_S3 the importer's local-disk files would be unservable, so
+    the backend must fail explicitly instead of importing."""
+    from app import db
+    from app.models import Setting
+    from wingetty_import.importer import LocalBackend
+
+    with app.app_context():
+        setting = Setting.get("USE_S3")
+        setting.value = "True"
+        db.session.commit()
+
+    with pytest.raises(RuntimeError, match="USE_S3"):
+        LocalBackend()
 
 
 def test_sha256_file(tmp_path):
