@@ -101,6 +101,8 @@ class Package(db.Model):
                         "Scope": scope,
                         "InstallerSwitches": self._get_installer_switches(installer),
                     }
+                    if installer.dependencies:
+                        data["Dependencies"] = installer.dependencies
                     if installer.installer_type == "zip":
                         data["NestedInstallerType"] = installer.nested_installer_type
                         data["NestedInstallerFiles"] = self._get_nested_installer_data(
@@ -124,6 +126,8 @@ class Package(db.Model):
                     "Scope": installer.scope,
                     "InstallerSwitches": self._get_installer_switches(installer),
                 }
+                if installer.dependencies:
+                    data["Dependencies"] = installer.dependencies
                 if installer.installer_type == "zip":
                     data["NestedInstallerType"] = installer.nested_installer_type
                     data["NestedInstallerFiles"] = self._get_nested_installer_data(
@@ -198,6 +202,10 @@ class Installer(db.Model):
     external_url = db.Column(db.String(255), nullable=True)
     installer_sha256 = db.Column(db.String(100))
     scope = db.Column(db.String(50))
+    # Winget manifest Dependencies object (PackageDependencies /
+    # ExternalDependencies), schema-validated on intake. NULL when the
+    # installer has none.
+    dependencies = db.Column(db.JSON, nullable=True)
     switches = db.relationship("InstallerSwitch", backref="installer", lazy=True)
     nested_installer_type = db.Column(db.String(50), nullable=True)
     nested_installer_files = db.relationship(

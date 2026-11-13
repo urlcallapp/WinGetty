@@ -28,3 +28,127 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+  windows-verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Protocol handler tests (parsing, validation, HKCU registration)
+        shell: pwsh
+        run: .\client\Test-WinGettyProtocol.ps1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate a locally-trusted TLS certificate
+        shell: pwsh
+        run: |
+          python -c "
+          import datetime
+          from cryptography import x509
+          from cryptography.hazmat.primitives import hashes, serialization
+          from cryptography.hazmat.primitives.asymmetric import rsa
+          from cryptography.x509.oid import NameOID
+          key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+          name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])
+          cert = (x509.CertificateBuilder()
+              .subject_name(name).issuer_name(name)
+              .public_key(key.public_key()).serial_number(x509.random_serial_number())
+              .not_valid_before(datetime.datetime.utcnow())
+              .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=2))
+              .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost'), x509.IPAddress(__import__('ipaddress').IPv4Address('127.0.0.1'))]), critical=False)
+              .sign(key, hashes.SHA256()))
+          open('ci-cert.pem','wb').write(cert.public_bytes(serialization.Encoding.PEM))
+          open('ci-key.pem','wb').write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+          "
+          # Trust ONLY this throwaway cert in the ephemeral runner, so winget
+          # and .NET accept https://localhost:8443 without any verification
+          # being disabled.
+          Import-Certificate -FilePath ci-cert.pem -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+
+      - name: Start WinGetty with a seeded fixture package
+        shell: pwsh
+        run: |
+          $env:WINGETTY_SQLALCHEMY_DATABASE_URI = "sqlite:///$($PWD.Path -replace '\\','/')/ci.db"
+          $env:WINGETTY_SECRET_KEY = "ci-secret"
+          $env:FLASK_APP = "app"
+          flask db upgrade
+          # Seed a harmless fixture (dummy exe bytes, never executed) through
+          # the importer itself, in --local mode.
+          New-Item -ItemType Directory -Force ci-drop/Fixture.App | Out-Null
+          [System.IO.File]::WriteAllBytes("$PWD/ci-drop/Fixture.App/app.exe", [System.Text.Encoding]::UTF8.GetBytes("MZ ci fixture - not a real installer"))
+          $sha = (Get-FileHash ci-drop/Fixture.App/app.exe -Algorithm SHA256).Hash.ToLower()
+          $lines = @(
+            'PackageIdentifier: Fixture.App',
+            'PackageVersion: "1.0"',
+            'PackageName: CI Fixture',
+            'Publisher: CI',
+            'Installers:',
+            '- Architecture: x64',
+            '  InstallerType: exe',
+            '  InstallerUrl: https://example.invalid/app.exe',
+            "  InstallerSha256: $sha",
+            '  Scope: machine',
+            'ManifestType: merged',
+            'ManifestVersion: "1.6"'
+          )
+          [System.IO.File]::WriteAllText("$PWD/ci-drop/Fixture.App/manifest.yaml", ($lines -join "`n"))
+          python -m wingetty_import ci-drop --local
+          Start-Process -NoNewWindow python -ArgumentList '-m','flask','run','--port','8443','--cert','ci-cert.pem','--key','ci-key.pem' -RedirectStandardOutput flask.out.log -RedirectStandardError flask.err.log
+          $ready = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-RestMethod https://localhost:8443/wg/information | Out-Null; $ready = $true; break } catch { Start-Sleep 2 }
+          }
+          if (-not $ready) { Get-Content flask.err.log; throw "WinGetty did not start" }
+
+      - name: winget client availability
+        shell: pwsh
+        run: |
+          $w = Get-Command winget -ErrorAction SilentlyContinue
+          if ($w) { winget --version } else { Write-Host "WINGET_NOT_AVAILABLE" }
+
+      - name: winget REST source contract (HTTPS, trusted local cert)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $info = Invoke-RestMethod https://localhost:8443/wg/information
+          if (-not $info.Data.SourceIdentifier) { throw "information endpoint missing SourceIdentifier" }
+          $manifest = Invoke-RestMethod https://localhost:8443/wg/packageManifests/Fixture.App
+          $installer = $manifest.Data.Versions[0].Installers[0]
+          if ($installer.Architecture -ne 'x64') { throw "wrong architecture" }
+          Invoke-WebRequest $installer.InstallerUrl -OutFile downloaded.exe
+          $expected = (Get-FileHash ci-drop/Fixture.App/app.exe -Algorithm SHA256).Hash
+          $actual = (Get-FileHash downloaded.exe -Algorithm SHA256).Hash
+          if ($expected -ne $actual) { throw "download hash mismatch" }
+          Write-Host "REST contract verified: information, manifest, internal download URL, sha256 roundtrip"
+
+      - name: winget source add / search / download against the local WinGetty source (STRICT)
+        shell: pwsh
+        run: |
+          winget source add --name WinGettyCI --arg https://localhost:8443/wg/ --type Microsoft.Rest --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { throw "winget source add failed against WinGetty" }
+          winget search Fixture.App --source WinGettyCI --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { throw "winget search failed against the WinGetty source" }
+          New-Item -ItemType Directory -Force ci-download | Out-Null
+          winget download Fixture.App --source WinGettyCI --exact -d ci-download --accept-package-agreements
+          if ($LASTEXITCODE -ne 0) { throw "winget download failed against the WinGetty source" }
+          Write-Host "winget source add/search/download succeeded"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (verification only, never pushed)
+        run: docker build --build-arg SOURCE_REVISION=${{ github.sha }} -t wingetty-ci-check .
+
+      - name: Verify corresponding-source archive is baked in and revision-stamped
+        run: |
+          docker run --rm --entrypoint sh wingetty-ci-check -c \
+            "ls -l source-archive/wingetty-source.tar.gz && tar -xzf source-archive/wingetty-source.tar.gz -O ./SOURCE_VERSION"

@@ -28,8 +28,20 @@ New components added:
   downloadable corresponding-source archive.
 - `scripts/build-source-archive.sh` - builds the corresponding-source
   tarball served at `/source/archive` (run automatically by the Dockerfile).
+- `wingetty_import/artifact.py` + `--artifact-url` - artifact-store
+  intake with size caps, traversal/link-safe extraction and credential
+  redaction in logs.
+- Installer `Dependencies` support end to end: JSON column (migration
+  c4d9e2f1a830), schema validation
+  (`wingetty_import/dependencies_schema.py`), API intake, manifest
+  emission. `add_installer` now also persists installer switches at
+  creation time (previously only the UI edit flow could set them).
+- `client/WinGettyProtocol.Common.ps1` + `client/Test-WinGettyProtocol.ps1`
+  - headless protocol-handler tests (parsing, validation, source pinning,
+  HKCU registration roundtrip) running on Windows CI.
 - `tests/`, `.github/workflows/tests.yml`, `requirements-dev.txt` - test
-  suite and CI.
+  suite and CI (pytest on Linux 3.10/3.11, Windows verification job,
+  Docker build check without image publishing).
 - `docs/` - GitHub Pages landing page with video and static catalog demo.
 
 Upstream files modified (each carries a dated header notice):

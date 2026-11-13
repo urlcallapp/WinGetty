@@ -41,7 +41,11 @@ RUN npm run build:css
 
 # Bake the corresponding-source archive into the image so the running
 # instance can offer it at /source/archive (AGPL-3.0), also on air-gapped
-# networks. chmod +x because the build context may not preserve modes.
+# networks. The build context has no .git, so the exact revision must be
+# passed in: docker build --build-arg SOURCE_REVISION=$(git rev-parse HEAD) .
+# chmod +x because the build context may not preserve modes.
+ARG SOURCE_REVISION=unknown
+ENV WINGETTY_SOURCE_REVISION=$SOURCE_REVISION
 RUN chmod +x scripts/build-source-archive.sh && sh scripts/build-source-archive.sh
 
 

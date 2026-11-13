@@ -33,6 +33,7 @@ class ManifestInstaller:
     url: str = ""
     scope: str = "machine"
     switches: dict = field(default_factory=dict)
+    dependencies: dict = field(default_factory=dict)
     nested_installer_type: str = ""
     nested_installer_files: list = field(default_factory=list)
 
@@ -114,6 +115,18 @@ def _parse_installer(data: dict) -> ManifestInstaller:
         # machine-wide, which is the common case for managed fleets.
         scope = "machine"
 
+    dependencies = data.get("Dependencies")
+    if dependencies is not None:
+        from wingetty_import.dependencies_schema import (
+            DependenciesError,
+            validate_dependencies,
+        )
+
+        try:
+            dependencies = validate_dependencies(dependencies)
+        except DependenciesError as e:
+            raise ManifestError(f"invalid Dependencies: {e}")
+
     return ManifestInstaller(
         architecture=str(data.get("Architecture") or "").lower(),
         installer_type=str(data.get("InstallerType") or "").lower(),
@@ -121,6 +134,7 @@ def _parse_installer(data: dict) -> ManifestInstaller:
         url=str(data.get("InstallerUrl") or ""),
         scope=scope,
         switches=switches,
+        dependencies=dependencies or {},
         nested_installer_type=str(data.get("NestedInstallerType") or "").lower(),
         nested_installer_files=nested_files,
     )

@@ -1,4 +1,5 @@
 # Modified 2026-11-13 (urlcallapp/WinGetty fork): see NOTICE.md for the list of changes.
+import json
 import os
 import boto3
 from flask import (
@@ -33,6 +34,7 @@ from app.models import (
 )
 from app.utils import InstallerError, create_installer, save_file, basedir, delete_installer_util
 from app.constants import installer_switches
+from wingetty_import.dependencies_schema import DependenciesError, validate_dependencies
 
 api = Blueprint("api", __name__)
 s3_client = boto3.client("s3")
@@ -408,6 +410,25 @@ def add_installer(identifier):
             409,
         )
 
+    # Optional installer switches, same fields the edit flow accepts
+    # (constants.installer_switches). Without this, API-created installers
+    # silently lost switches that the UI edit flow could set afterwards.
+    switch_values = {}
+    for field_name in installer_switches:
+        if field_name in request.form and request.form.get(field_name) != "":
+            switch_values[field_name] = request.form.get(field_name)
+
+    # Optional Dependencies, sent as a JSON string and validated against
+    # the winget manifest schema subset before it is stored.
+    dependencies = None
+    if request.form.get("dependencies"):
+        try:
+            dependencies = validate_dependencies(
+                json.loads(request.form["dependencies"])
+            )
+        except (json.JSONDecodeError, DependenciesError) as e:
+            return jsonify({"error": f"invalid dependencies: {e}"}), 400
+
     current_app.logger.info("File and version found")
     try:
         installer = create_installer(
@@ -416,6 +437,13 @@ def add_installer(identifier):
     except InstallerError as e:
         current_app.logger.warning(f"Error creating installer: {e}")
         return jsonify({"error": str(e)}), 400
+
+    for parameter, value in switch_values.items():
+        installer.switches.append(
+            InstallerSwitch(parameter=parameter, value=value)
+        )
+    if dependencies is not None:
+        installer.dependencies = dependencies
 
     version.installers.append(installer)
     db.session.commit()

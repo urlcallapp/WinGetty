@@ -20,9 +20,19 @@ Watch a folder and import new drops every 10 minutes:
 import argparse
 import getpass
 import os
+import shutil
 import sys
+import tempfile
 import time
+import urllib.parse
 
+from .artifact import (
+    DEFAULT_MAX_DOWNLOAD_BYTES,
+    ArtifactError,
+    fetch_artifact,
+    redact_url,
+    safe_extract,
+)
 from .importer import ApiBackend, LocalBackend, print_summary, run_import
 
 
@@ -36,8 +46,22 @@ def build_parser():
     )
     parser.add_argument(
         "drop_dir",
+        nargs="?",
         help="Folder containing the downloaded installers and their YAML "
-        "manifests (scanned recursively).",
+        "manifests (scanned recursively). Not needed with --artifact-url.",
+    )
+    parser.add_argument(
+        "--artifact-url",
+        help="URL of a .zip/.tar.gz archive in an internal artifact store "
+        "(Nexus, Artifactory, static host) containing the drop folder. The "
+        "archive is downloaded with a size cap and extracted with traversal "
+        "and link protection before importing.",
+    )
+    parser.add_argument(
+        "--max-artifact-bytes",
+        type=int,
+        default=DEFAULT_MAX_DOWNLOAD_BYTES,
+        help="Download cap for --artifact-url (default: %(default)s bytes).",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -105,8 +129,33 @@ def make_backend(args):
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    if not os.path.isdir(args.drop_dir):
-        raise SystemExit(f"Drop folder does not exist: {args.drop_dir}")
+
+    temp_dir = None
+    if args.artifact_url:
+        try:
+            temp_dir = tempfile.mkdtemp(prefix="wingetty-artifact-")
+            archive_path = os.path.join(temp_dir, os.path.basename(
+                urllib.parse.urlsplit(args.artifact_url).path
+            ) or "artifact.bin")
+            size = fetch_artifact(
+                args.artifact_url, archive_path,
+                max_bytes=args.max_artifact_bytes,
+            )
+            members = safe_extract(archive_path, os.path.join(temp_dir, "drop"))
+            print(
+                f"Fetched {size} bytes and extracted {members} files from "
+                f"{redact_url(args.artifact_url)}"
+            )
+            args.drop_dir = os.path.join(temp_dir, "drop")
+        except ArtifactError as e:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise SystemExit(str(e))
+
+    if not args.drop_dir or not os.path.isdir(args.drop_dir):
+        raise SystemExit(
+            "Drop folder does not exist: "
+            f"{args.drop_dir or '(none given - pass drop_dir or --artifact-url)'}"
+        )
 
     backend = make_backend(args)
     had_errors = False
@@ -134,6 +183,8 @@ def main(argv=None):
         close = getattr(backend, "close", None)
         if close:
             close()
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     return 1 if had_errors else 0
 

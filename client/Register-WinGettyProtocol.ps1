@@ -51,8 +51,11 @@ if (-not (Test-Path $handler)) {
     throw "Handler script not found next to this script: $handler"
 }
 
+# Windows PowerShell 5.1 is always at this path on Windows 10/11; using it
+# keeps the registered command valid no matter which PowerShell ran the
+# registration (pwsh's $PSHOME has no powershell.exe).
 $command = '"{0}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" -Uri "%1"' -f `
-    (Join-Path $PSHOME 'powershell.exe'), $handler
+    "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe", $handler
 
 $baseKey = "HKCU:\Software\Classes\$Scheme"
 New-Item -Path $baseKey -Force | Out-Null

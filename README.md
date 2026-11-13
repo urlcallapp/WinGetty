@@ -140,6 +140,21 @@ Continuous intake (for an artifact store synced into the drop folder):
 python -m wingetty_import /srv/winget-drops --local --watch 600
 ```
 
+Pull a packaged drop folder straight from an internal artifact store
+(Nexus, Artifactory, any static HTTP host). Archives (.zip/.tar.gz) are
+downloaded with a size cap (`--max-artifact-bytes`) and extracted with
+path-traversal and link protection; URLs are redacted in log output so
+embedded credentials never leak:
+
+```
+python -m wingetty_import --artifact-url https://nexus.internal/drops/latest.zip \
+    --server https://wingetty.internal --username svc-import
+```
+
+Installer switches (`Silent`, `Custom`, ...) and manifest `Dependencies`
+(package and external) are carried through into WinGetty and served back
+to winget clients in the generated manifests.
+
 Notes and limits:
 - Stick to regular exe/msi/zip packages. Microsoft Store (msstore) source
   apps need Entra ID to download and carry offline license files, and

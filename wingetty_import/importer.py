@@ -238,6 +238,9 @@ class LocalBackend:
                     )
                 )
 
+        if installer.dependencies:
+            record.dependencies = installer.dependencies
+
         if installer.nested_installer_type:
             record.nested_installer_type = installer.nested_installer_type
             for nested in installer.nested_installer_files:
@@ -320,6 +323,8 @@ class ApiBackend:
         for parameter, value in installer.switches.items():
             if parameter in SUPPORTED_SWITCHES:
                 data[parameter] = value
+        if installer.dependencies:
+            data["dependencies"] = json.dumps(installer.dependencies)
         if installer.nested_installer_type:
             data["installer-nestedinstallertype"] = installer.nested_installer_type
             if installer.nested_installer_files:

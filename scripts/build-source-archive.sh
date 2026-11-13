@@ -8,9 +8,16 @@ OUT_DIR="source-archive"
 OUT="$OUT_DIR/wingetty-source.tar.gz"
 mkdir -p "$OUT_DIR"
 
-VERSION_STAMP="unknown"
-if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    VERSION_STAMP=$(git rev-parse HEAD)
+# Revision stamp: explicit env (Docker build arg) wins; then git; then
+# unknown. Docker builds have no .git, so the Dockerfile passes the
+# revision in via --build-arg SOURCE_REVISION.
+VERSION_STAMP="${WINGETTY_SOURCE_REVISION:-}"
+if [ -z "$VERSION_STAMP" ]; then
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        VERSION_STAMP=$(git rev-parse HEAD)
+    else
+        VERSION_STAMP="unknown"
+    fi
 fi
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
