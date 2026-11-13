@@ -36,6 +36,9 @@ WinGetty is a self-hosted winget package source. It's portable and can run on Li
 
 - Intuitive and easy to use Webinterface
 - Add your own packages for internal or customized software with multiple versions, installers including architectures and scope
+- **Automated import** of packages downloaded with `winget download` - point the importer at a folder or artifact store, no manual per-package UI work
+- **End-user app catalog** at `/catalog` with search, copyable install commands and one-click install buttons
+- **Safe `wingetty://` protocol handler** for Windows clients so catalog Install buttons trigger winget directly
 - Search, list, show and install software - the core winget features all work
 - Support for nested installers and installer switches
 - Easy updating of package metadata
@@ -101,6 +104,82 @@ Successfully installed
 ~ took 12s
 ❯
 ```
+
+### 📥 Automated package import
+
+On an internet-connected machine, download packages with winget. Each
+download produces the installer plus a generated YAML manifest:
+
+```
+winget download --id 7zip.7zip -d .\drops\7zip
+```
+
+Carry the drop folders (or sync your artifact store into one) to the
+WinGetty side and run the importer - it parses the YAML, verifies the
+SHA256 of every installer against the manifest, and registers everything
+in WinGetty. Re-running it is safe: installers that already exist are
+skipped, and every run writes a JSON report of what was added, skipped or
+failed.
+
+On the WinGetty host (same `WINGETTY_*` environment as the app):
+
+```
+python -m wingetty_import /srv/winget-drops --local
+```
+
+From any machine, through the REST API:
+
+```
+python -m wingetty_import /srv/winget-drops \
+    --server https://wingetty.internal --username svc-import
+```
+
+Continuous intake (for an artifact store synced into the drop folder):
+
+```
+python -m wingetty_import /srv/winget-drops --local --watch 600
+```
+
+Notes and limits:
+- Stick to regular exe/msi/zip packages. Microsoft Store (msstore) source
+  apps need Entra ID to download and carry offline license files, and
+  manifests with `DownloadCommandProhibited` cannot be downloaded at all.
+- The manifest's original vendor URL is only used to locate the downloaded
+  file; WinGetty always serves installers from its own internal URL, so no
+  internet URL leaks into the generated manifests.
+- A small "bootstrapper" installer that downloads the rest of itself from
+  the internet at install time will not work in a disconnected network.
+  Make sure the installers you import are complete and their dependencies
+  are available internally.
+
+### 🛍️ End-user catalog
+
+WinGetty serves a user-facing catalog at `/catalog` (no login required by
+default; toggle it in Settings). Users see the available apps, copy the
+ready-made `winget install` command or click Install. The one-time source
+setup command is shown at the top of the page.
+
+Settings: `Enable user catalog`, `Catalog requires login`,
+`Catalog source name`, `Catalog install links`.
+
+### 🖱️ One-click installs from the browser (wingetty://)
+
+winget has no built-in URL protocol, so the catalog's Install buttons use a
+small Windows component from `client/`: it registers a `wingetty://` handler
+that validates the package identifier, only allows the install action, pins
+the allowed source name and asks the user for confirmation before running
+winget with a fixed argument list - links can never inject commands or swap
+the source. See `client/README.md`.
+
+### 🧪 Development
+
+```
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q                 # backend, importer, winget API and catalog tests
+npm ci && npm run build:css   # rebuild the Tailwind CSS
+```
+
+Tests also run in GitHub Actions on every push and pull request.
 
 <hr>
     <a href="https://github.com/thilojaeggi/WinGetty/issues">Report Issue</a>

@@ -78,6 +78,41 @@ def create_settings():
             "depends_on": "enable_uplink",
             "position": 5,
         },
+        {
+            "name": "Enable user catalog",
+            "description": "Serve the end-user app catalog at /catalog.",
+            "key": "catalog_enabled",
+            "type": "boolean",
+            "value": "True",
+            "position": 6,
+        },
+        {
+            "name": "Catalog requires login",
+            "description": "Require users to log in before they can browse the catalog.",
+            "key": "catalog_require_login",
+            "type": "boolean",
+            "value": "False",
+            "depends_on": "catalog_enabled",
+            "position": 7,
+        },
+        {
+            "name": "Catalog source name",
+            "description": "The winget source name end users register and install from.",
+            "key": "catalog_source_name",
+            "type": "string",
+            "value": "WinGetty",
+            "depends_on": "catalog_enabled",
+            "position": 8,
+        },
+        {
+            "name": "Catalog install links",
+            "description": "Show wingetty:// protocol install buttons in the catalog (requires the WinGetty protocol handler on client machines).",
+            "key": "catalog_protocol_enabled",
+            "type": "boolean",
+            "value": "True",
+            "depends_on": "catalog_enabled",
+            "position": 9,
+        },
     ]
 
     for setting in repository_settings:

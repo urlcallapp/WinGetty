@@ -8,7 +8,6 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_htmx import HTMX
 from datetime import datetime
-from distutils.version import LooseVersion
 
 from sqlalchemy import MetaData
 from config import settings
@@ -43,7 +42,10 @@ migrate = Migrate()
 
 
 def sort_versions(versions):
-    return sorted(versions, key=lambda x: LooseVersion(x.version_code), reverse=True)
+    # Imported lazily to avoid a circular import at module load time.
+    from app.models import version_sort_key
+
+    return sorted(versions, key=lambda x: version_sort_key(x.version_code), reverse=True)
 
 def page_not_found(e):
   return render_template('error/404.j2',error=True), 404
@@ -97,10 +99,12 @@ def create_app():
     from app.api_routes import api
     from app.auth_routes import auth
     from app.winget_routes import winget
+    from app.catalog_routes import catalog
 
     app.register_blueprint(ui)
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(winget, url_prefix='/wg')
+    app.register_blueprint(catalog, url_prefix='/catalog')
     app.register_blueprint(auth)
 
     app.jinja_env.filters['sort_versions'] = sort_versions

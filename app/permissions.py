@@ -118,7 +118,7 @@ def create_permissions():
         if first_user:
             first_user.role = roles['admin']
     
-    for user in User.query.filter_by(role=None):
+    for user in User.query.filter(User.role_id.is_(None)):
         user.role = roles['viewer']
 
 def create_all():

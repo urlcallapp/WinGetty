@@ -38,6 +38,12 @@
                 class="block mt-2 md:inline-block md:mt-0  hover:text-blue-600 mr-4 transition-colors duration-500">
                 Setup
             </a>
+            {% if global_settings['CATALOG_ENABLED'] %}
+            <a href="{{ url_for('catalog.index') }}" target="_blank"
+                class="block mt-2 md:inline-block md:mt-0  hover:text-blue-600 mr-4 transition-colors duration-500">
+                Catalog
+            </a>
+            {% endif %}
 
         </div>
         <div class="flex-grow"></div>

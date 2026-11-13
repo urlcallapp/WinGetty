@@ -30,7 +30,7 @@ from app.models import (
     Setting,
     User,
 )
-from app.utils import create_installer, save_file, basedir, delete_installer_util
+from app.utils import InstallerError, create_installer, save_file, basedir, delete_installer_util
 from app.constants import installer_switches
 
 api = Blueprint("api", __name__)
@@ -154,6 +154,8 @@ def generate_presigned_url():
     try:
         # Extract file information from the request
         file_name = request.form.get("file_name")
+        if not file_name or "." not in file_name:
+            return jsonify({"error": "file_name must include a file extension"}), 400
         file_extension = file_name.rsplit(".", 1)[1]
         content_type = request.form.get("content_type")
 
@@ -214,17 +216,23 @@ def add_package():
     external_url = installer_form.url.data
     is_aws = installer_form.is_aws.data
 
+    if Package.query.filter_by(identifier=identifier).first() is not None:
+        current_app.logger.warning(f"Package {identifier} already exists")
+        return jsonify({"error": f"A package with identifier {identifier} already exists"}), 409
+
     package = Package(identifier=identifier, name=name, publisher=publisher)
 
-    if file or external_url and version:
+    if (file or external_url) and version:
         current_app.logger.info("File and version found")
         if not current_user.role.has_permission("add:installer"):
             current_app.logger.warning("User doesn't have permission to add installer")
             return "User doesn't have permission to add installer", 403
 
-        installer = create_installer(publisher, identifier, version, installer_form)
-        if installer is None:
-            return "Error creating installer", 500
+        try:
+            installer = create_installer(publisher, identifier, version, installer_form)
+        except InstallerError as e:
+            current_app.logger.warning(f"Error creating installer: {e}")
+            return jsonify({"error": str(e)}), 400
 
         version_code = PackageVersion(
             version_code=version,
@@ -267,7 +275,6 @@ def update_package(identifier):
 @login_required
 @permission_required("delete:package")
 def delete_package(identifier):
-    print("wtfff")
     package = Package.query.filter_by(identifier=identifier).first()
     if package is None:
         return "Package not found", 404
@@ -289,29 +296,48 @@ def add_version(identifier):
         current_app.logger.warning(f"Validation errors: {validation_errors}")
         return jsonify(validation_errors), 400
 
-    version = installer_form.version.data
+    version_code = installer_form.version.data
 
     package = Package.query.filter_by(identifier=identifier).first()
     if package is None:
         return "Package not found", 404
+    if (
+        PackageVersion.query.filter_by(
+            identifier=identifier, version_code=version_code
+        ).first()
+        is not None
+    ):
+        current_app.logger.warning(
+            f"Version {version_code} already exists for package {identifier}"
+        )
+        return (
+            jsonify(
+                {
+                    "error": f"Version {version_code} already exists for package {identifier}"
+                }
+            ),
+            409,
+        )
     file = installer_form.file.data
     external_url = installer_form.url.data
     version = PackageVersion(
-        version_code=version,
+        version_code=version_code,
         package_locale="en-US",
         short_description=package.name,
         identifier=identifier,
     )
-    if file or external_url and version:
+    if (file or external_url) and version:
         current_app.logger.info("File and version found")
         if not current_user.role.has_permission("add:installer"):
             current_app.logger.warning("User doesn't have permission to add installer")
             return "User doesn't have permission to add installer", 403
-        installer = create_installer(
-            package.publisher, identifier, version.version_code, installer_form
-        )
-        if installer is None:
-            return "Error creating installer", 500
+        try:
+            installer = create_installer(
+                package.publisher, identifier, version.version_code, installer_form
+            )
+        except InstallerError as e:
+            current_app.logger.warning(f"Error creating installer: {e}")
+            return jsonify({"error": str(e)}), 400
 
         version.installers.append(installer)
 
@@ -326,7 +352,7 @@ def add_version(identifier):
         current_app.logger.error(f"Database error: {e}")
         return "Database error", 500
 
-    return redirect(request.referrer)
+    return redirect(request.referrer or url_for("ui.package", identifier=identifier))
 
 
 @api.route("/package/<identifier>/add_installer", methods=["POST"])
@@ -345,25 +371,55 @@ def add_installer(identifier):
     if package is None:
         return "Package not found", 404
 
-    # get version by id
+    # Get the version, scoped to this package: version codes are not unique
+    # across packages, so an unscoped lookup can attach the installer to a
+    # different package that happens to share the same version code.
     version = PackageVersion.query.filter_by(
-        version_code=installer_form.version.data
+        identifier=identifier, version_code=installer_form.version.data
     ).first()
     if version is None:
         return "Package version not found", 404
 
-    if installer_form.file or installer_form.url.data and version:
-        current_app.logger.info("File and version found")
+    file = installer_form.file.data
+    external_url = installer_form.url.data
+    if not file and not external_url:
+        return (
+            jsonify({"error": "Either an installer file or an external URL must be provided"}),
+            400,
+        )
+
+    existing = Installer.query.filter_by(
+        version_id=version.id,
+        architecture=installer_form.architecture.data,
+        scope=installer_form.installer_scope.data,
+    ).first()
+    if existing is not None:
+        return (
+            jsonify(
+                {
+                    "error": (
+                        f"An installer for {installer_form.architecture.data}/"
+                        f"{installer_form.installer_scope.data} already exists on "
+                        f"{identifier} {version.version_code}"
+                    )
+                }
+            ),
+            409,
+        )
+
+    current_app.logger.info("File and version found")
+    try:
         installer = create_installer(
             package.publisher, identifier, version.version_code, installer_form
         )
-        if installer is None:
-            return "Error creating installer", 500
+    except InstallerError as e:
+        current_app.logger.warning(f"Error creating installer: {e}")
+        return jsonify({"error": str(e)}), 400
 
-        version.installers.append(installer)
-        db.session.commit()
+    version.installers.append(installer)
+    db.session.commit()
 
-        return redirect(request.referrer)
+    return redirect(request.referrer or url_for("ui.package", identifier=identifier))
 
 
 @api.route("/package/<identifier>/edit_installer", methods=["POST"])

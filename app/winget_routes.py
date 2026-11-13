@@ -25,7 +25,7 @@ def information():
 def get_package_manifest(name):
     package = Package.query.filter_by(identifier=name).first()
     if package is None:
-        return jsonify({}), 204
+        return "", 204
     return jsonify(package.generate_output())
 
 
@@ -51,6 +51,11 @@ def manifest_search():
         match_type = main_query.get('MatchType')
         if match_type == 'Exact':
             filter_conditions.append(or_(Package.name == keyword, Package.identifier == keyword))
+        elif match_type in ('Partial', 'Substring', 'CaseInsensitive'):
+            filter_conditions.append(or_(
+                Package.name.ilike(f'%{keyword}%'),
+                Package.identifier.ilike(f'%{keyword}%')
+            ))
 
 
     for filter_entry in combined_filters:
@@ -96,7 +101,7 @@ def manifest_search():
         ]
     if not output_data:
         current_app.logger.info("No packages found.")
-        return jsonify({}), 204
+        return "", 204
 
     current_app.logger.info(f"Returning {len(output_data)} packages.")
     current_app.logger.info(f"Output Data: {output_data}")

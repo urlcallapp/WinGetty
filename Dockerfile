@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the Flask app code into the container
 COPY app/ app/
+COPY wingetty_import/ wingetty_import/
 COPY tailwind.config.js .
 COPY package.json .
 COPY package-lock.json .

@@ -1,7 +1,22 @@
 import dataclasses
 from datetime import datetime
-from distutils.version import LooseVersion
 import json
+
+from packaging.version import InvalidVersion, Version
+
+
+def version_sort_key(version_string):
+    """Return a sort key for a winget version string.
+
+    Winget versions are not guaranteed to follow PEP 440 (for example
+    "1.0.0-beta" or "2023.09.28.1"), so unparseable values fall back to a
+    string-based key that sorts before any parseable version instead of
+    raising during the sort.
+    """
+    try:
+        return (1, Version(str(version_string)))
+    except InvalidVersion:
+        return (0, str(version_string))
 from app import db, bcrypt
 from flask import url_for, current_app
 import os
@@ -28,7 +43,7 @@ class Package(db.Model):
             "download_count": self.download_count,
             "versions": sorted(
                 [version.to_dict() for version in self.versions],
-                key=lambda x: LooseVersion(x["version_code"]),
+                key=lambda x: version_sort_key(x["version_code"]),
                 reverse=True,
             ),
         }
@@ -156,7 +171,7 @@ class PackageVersion(db.Model):
     default_locale = db.Column(db.String(50))
     package_locale = db.Column(db.String(50))
     short_description = db.Column(db.String(50))
-    date_added = db.Column(db.DateTime, default=datetime.now())
+    date_added = db.Column(db.DateTime, default=datetime.utcnow)
     installers = db.relationship("Installer", backref="package_version", lazy=True)
 
     def to_dict(self):

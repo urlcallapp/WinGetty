@@ -11,6 +11,10 @@ URL_EXPIRATION_SECONDS = 3600
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 
+class InstallerError(Exception):
+    """Raised when an installer cannot be created from the supplied input."""
+
+
 def get_file_hash_from_url(url, max_content_length=1024 * 1024 * 1024 * 10):  # Default max content length set to 10GB
     """Download file from the given URL and return its SHA256 hash."""
     
@@ -18,7 +22,8 @@ def get_file_hash_from_url(url, max_content_length=1024 * 1024 * 1024 * 10):  # 
     if not url.startswith("https://"):
         raise ValueError("URL must use HTTPS.")
     
-    response = requests.get(url, stream=True, timeout=15)  # Timeout set to 10 seconds
+    # timeout applies to connect and to each read, not to the whole download.
+    response = requests.get(url, stream=True, timeout=30)
     response.raise_for_status()  # Ensure we got an OK response
     
     # Check if the content length exceeds the max content length
@@ -50,7 +55,7 @@ def create_installer(publisher, identifier, version, installer_form):
         file_name = f'{scope}.' + file_name.rsplit('.', 1)[1]
         hash = save_file(file, file_name, publisher, identifier, version, architecture)
         if hash is None:
-            return "Error saving file", 500
+            raise InstallerError("Error saving file")
     elif not file and external_url and is_aws:
         current_app.logger.info("Installer is on AWS")
         file_name = external_url
@@ -64,17 +69,21 @@ def create_installer(publisher, identifier, version, installer_form):
             ExpiresIn=URL_EXPIRATION_SECONDS
         )
         current_app.logger.info(f"Getting file hash from presigned URL: {presigned_url}")
-        hash = get_file_hash_from_url(presigned_url)
+        try:
+            hash = get_file_hash_from_url(presigned_url)
+        except (ValueError, requests.RequestException) as e:
+            raise InstallerError(f"Could not hash installer from S3: {e}")
     # If no file is provided, but an external_url is available, use that
     elif external_url:
         current_app.logger.info("Getting file hash from external URL")
-        hash = get_file_hash_from_url(external_url)
+        try:
+            hash = get_file_hash_from_url(external_url)
+        except (ValueError, requests.RequestException) as e:
+            raise InstallerError(f"Could not hash installer from external URL: {e}")
         file_name = None
-
-        
     else:
         current_app.logger.error("No file or external URL provided")
-        raise ValueError("Either a file or an external URL must be provided.")
+        raise InstallerError("Either a file or an external URL must be provided.")
     
     installer = Installer(
         architecture=architecture,
@@ -95,12 +104,12 @@ def create_installer(publisher, identifier, version, installer_form):
             installer_switch.value = field_value
             installer.switches.append(installer_switch)
 
-    if nestedinstallertype is not None and nestedinstallerpath is not None:
+    if nestedinstallertype and nestedinstallerpath:
         installer.nested_installer_type = nestedinstallertype
         nested_installer_file = NestedInstallerFile(relative_file_path=nestedinstallerpath)
         installer.nested_installer_files.append(nested_installer_file)
-    elif nestedinstallertype is not None or nestedinstallerpath is not None:
-        return "Nested installer type and path should be provided together", 500
+    elif nestedinstallertype or nestedinstallerpath:
+        raise InstallerError("Nested installer type and path should be provided together")
 
     return installer
 

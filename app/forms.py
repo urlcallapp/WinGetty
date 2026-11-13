@@ -72,6 +72,23 @@ class AddInstallerFormFields(FlaskForm):
 
     def __init__(self, file_required=True, *args, **kwargs):
         super(AddInstallerFormFields, self).__init__(*args, **kwargs)
+
+        # SelectFields reject a missing value ("Not a valid choice"), which
+        # made it impossible to add a package/version without an installer
+        # through the API, or to skip the nested-installer fields for non-zip
+        # installers. Give each select an empty choice; the RequiredIfFileOrURL
+        # validators below still enforce real values when a file/URL is sent.
+        for field_name, choices in (
+            ('architecture', constants.architectures),
+            ('installer_type', constants.installer_types),
+            ('installer_scope', constants.installer_scopes),
+            ('nestedinstallertype', constants.nested_installer_types),
+        ):
+            form_field = self._fields[field_name]
+            form_field.choices = [("", "")] + list(choices)
+            if form_field.data is None:
+                form_field.data = ""
+
         if file_required:
             self.file.validators.append(FileOrURLRequired(url_field="url", file_required=True))
             self.url.validators.append(Optional())  # Setting the URL field to optional when file is required
