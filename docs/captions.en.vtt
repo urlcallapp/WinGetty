@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00.000 --> 00:03.000
+WinGetty: your own winget source, on your network.
+
+00:03.000 --> 00:07.000
+The end-user catalog lists every imported app, with one-time source setup and per-app install commands.
+
+00:07.000 --> 00:11.000
+Each app shows its versions with Install buttons and copyable winget commands.
+
+00:11.000 --> 00:15.000
+Admins manage packages in the WinGetty web interface - or let the importer do it automatically.
+
+00:15.000 --> 00:18.000
+Catalog behavior is configurable: enable it, require login, set the source name, toggle install links.
+
+00:18.000 --> 00:21.000
+Import. Publish. Install. Free and open source on GitHub.
