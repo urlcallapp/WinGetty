@@ -14,7 +14,7 @@
         <div>
             <h1 class="text-3xl font-medium text-gray-800 dark:text-gray-200">{{ repo_name }} app catalog</h1>
             <p class="text-gray-500 dark:text-gray-400">Browse the apps available on this private winget source and
-                install them with winget.</p>
+                install them with winget. Click a card for more details.</p>
         </div>
     </div>
 
@@ -55,7 +55,11 @@
     <!-- Package cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="!loading" x-cloak>
         <template x-for="package in packages" :key="package.identifier">
-            <div class="bg-white dark:bg-neutral-900 rounded-2xl shadow p-4 flex flex-col gap-y-3">
+            <div class="bg-white dark:bg-neutral-900 rounded-2xl shadow p-4 flex flex-col gap-y-3 cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring focus:ring-blue-300 focus:ring-opacity-50"
+                role="button" tabindex="0" :aria-label="'Show details for ' + package.name"
+                @click="detailsPkg = package"
+                @keydown.enter.prevent="detailsPkg = package"
+                @keydown.space.prevent="detailsPkg = package">
                 <div class="flex items-start justify-between gap-x-2">
                     <div class="min-w-0">
                         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate"
@@ -68,7 +72,7 @@
                         x-text="'v' + package.latest_version"></span>
                 </div>
                 <p class="text-sm text-gray-600 dark:text-gray-300" x-text="package.description"></p>
-                <div class="flex items-center gap-2 mt-auto flex-wrap">
+                <div class="flex items-center gap-2 mt-auto flex-wrap" @click.stop>
                     {% if protocol_enabled %}
                     <a :href="protocolUrl(package)"
                         class="flex items-center justify-center px-3 py-1.5 text-sm text-white transition-colors duration-300 bg-blue-600 rounded-lg gap-x-2 hover:bg-blue-500">
@@ -89,7 +93,7 @@
                         </svg>
                         <span>Copy command</span>
                     </button>
-                    <button type="button" @click="selected = package"
+                    <button type="button" @click.stop="selected = package"
                         class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 hover:underline">
                         Versions
                     </button>
@@ -121,6 +125,106 @@
         </div>
     </div>
 
+    <!-- Details modal (clicking a card) -->
+    <div x-cloak x-show="detailsPkg !== null" @keydown.escape.window="detailsPkg = null"
+        class="fixed top-0 left-0 right-0 z-50 w-full p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-full max-h-full dark:bg-neutral-700/40 flex justify-center items-center">
+        <div class="relative w-full max-w-lg" @click.away="detailsPkg = null">
+            <div class="relative bg-white rounded-2xl shadow dark:bg-neutral-900 p-4 flex flex-col gap-y-3 max-h-[85vh] overflow-y-auto"
+                role="dialog" aria-modal="true" :aria-label="detailsPkg ? 'Details for ' + detailsPkg.name : ''">
+                <div class="flex items-start justify-between gap-x-2">
+                    <div class="min-w-0">
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white"
+                            x-text="detailsPkg ? detailsPkg.name : ''"></h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400"
+                            x-text="detailsPkg ? detailsPkg.publisher + ' · ' + detailsPkg.identifier + ' · v' + detailsPkg.latest_version : ''">
+                        </p>
+                    </div>
+                    <button type="button" @click="detailsPkg = null" aria-label="Close details"
+                        class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white shrink-0">
+                        <svg aria-hidden="true" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293-4.293a1 1 0 01-1.414-1.414L10 4.293 5.707 4.293 4.293 4.293z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <p class="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                    x-text="detailsPkg ? (detailsPkg.details.description || detailsPkg.description) : ''"></p>
+
+                <div class="flex flex-wrap gap-2" x-show="detailsPkg && detailsPkg.details.tags">
+                    <template x-for="tag in (detailsPkg && detailsPkg.details.tags ? detailsPkg.details.tags : [])"
+                        :key="tag">
+                        <span
+                            class="px-2 py-0.5 text-xs rounded-full bg-blue-100/70 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200"
+                            x-text="tag"></span>
+                    </template>
+                </div>
+
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2"
+                    x-show="detailsPkg && detailsFacts(detailsPkg).length > 0">
+                    <template x-for="fact in (detailsPkg ? detailsFacts(detailsPkg) : [])" :key="fact.label">
+                        <div class="bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                            <dt class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                                x-text="fact.label"></dt>
+                            <dd class="text-sm text-gray-800 dark:text-gray-200 break-words" x-text="fact.value">
+                            </dd>
+                        </div>
+                    </template>
+                </dl>
+
+                <div class="flex flex-wrap gap-2" x-show="detailsPkg && detailsLinks(detailsPkg).length > 0">
+                    <template x-for="link in (detailsPkg ? detailsLinks(detailsPkg) : [])" :key="link.label">
+                        <a :href="link.url" target="_blank" rel="noopener noreferrer"
+                            class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:underline"
+                            x-text="link.label"></a>
+                    </template>
+                </div>
+
+                <template x-if="detailsPkg && detailsPkg.details.installation_notes">
+                    <details class="text-sm bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                        <summary class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">Installation
+                            notes</summary>
+                        <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                            x-text="detailsPkg ? detailsPkg.details.installation_notes : ''"></p>
+                    </details>
+                </template>
+
+                <template x-if="detailsPkg && detailsPkg.details.release_notes">
+                    <details class="text-sm bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                        <summary class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">Release
+                            notes</summary>
+                        <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                            x-text="detailsPkg ? detailsPkg.details.release_notes : ''"></p>
+                    </details>
+                </template>
+
+                <p class="text-xs text-gray-400 dark:text-gray-500"
+                    x-text="detailsPkg ? 'Details from the winget manifest of version ' + detailsPkg.latest_version : ''">
+                </p>
+
+                <div class="flex items-center gap-2 flex-wrap border-t border-gray-100 dark:border-neutral-800 pt-3">
+                    {% if protocol_enabled %}
+                    <a :href="detailsPkg ? protocolUrl(detailsPkg) : '#'"
+                        class="flex items-center justify-center px-3 py-1.5 text-sm text-white transition-colors duration-300 bg-blue-600 rounded-lg gap-x-2 hover:bg-blue-500">
+                        <span>Install</span>
+                    </a>
+                    {% endif %}
+                    <button type="button"
+                        @click="detailsPkg && copy(installCommand(detailsPkg), 'Install command copied')"
+                        class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-neutral-800 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-700">
+                        Copy command
+                    </button>
+                    <button type="button" @click="selected = detailsPkg; detailsPkg = null"
+                        class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 hover:underline">
+                        All versions
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Versions modal -->
     <div x-cloak x-show="selected !== null" @keydown.escape.window="selected = null"
         class="fixed top-0 left-0 right-0 z-50 w-full p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-full max-h-full dark:bg-neutral-700/40 flex justify-center items-center">
@@ -140,19 +244,29 @@
                     </button>
                 </div>
                 <template x-for="version in (selected ? selected.versions : [])" :key="version">
-                    <div
-                        class="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
-                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1"
-                            x-text="'Version ' + version"></span>
-                        <div class="flex gap-2">
-                            {% if protocol_enabled %}
-                            <a :href="protocolUrl(selected, version)"
-                                class="px-3 py-1 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-300">Install</a>
-                            {% endif %}
-                            <button type="button" @click="copy(installCommand(selected, version), 'Install command copied')"
-                                class="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-neutral-800 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors duration-300">Copy
-                                command</button>
+                    <div class="bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2 flex flex-col gap-y-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <span class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1"
+                                x-text="'Version ' + version"></span>
+                            <div class="flex gap-2">
+                                {% if protocol_enabled %}
+                                <a :href="protocolUrl(selected, version)"
+                                    class="px-3 py-1 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-300">Install</a>
+                                {% endif %}
+                                <button type="button" @click="copy(installCommand(selected, version), 'Install command copied')"
+                                    class="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-neutral-800 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors duration-300">Copy
+                                    command</button>
+                            </div>
                         </div>
+                        <template x-if="selected && versionReleaseNotes(selected, version)">
+                            <details class="text-sm">
+                                <summary
+                                    class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">Release
+                                    notes</summary>
+                                <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                                    x-text="selected ? versionReleaseNotes(selected, version) : ''"></p>
+                            </details>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -170,6 +284,7 @@
             search: '',
             loading: true,
             selected: null,
+            detailsPkg: null,
             sourceName: {{ source_name | tojson }},
             protocolScheme: {{ protocol_scheme | tojson }},
             sourceAddCommand: `winget source add -n {{ source_name }} -t "Microsoft.Rest" -a {{ url_for('winget.index', _external=True, _scheme="https") }}`,
@@ -212,6 +327,52 @@
                 window.dispatchEvent(new CustomEvent('notice', {
                     detail: { text: message, type: 'success' }
                 }));
+            },
+            // Only http(s) URLs may become links; everything else is dropped.
+            safeUrl(url) {
+                return (typeof url === 'string' && /^https?:\/\//i.test(url)) ? url : null;
+            },
+            detailsFacts(package_) {
+                let d = (package_ && package_.details) || {};
+                let facts = [];
+                let fields = [
+                    ['author', 'Author'],
+                    ['license', 'License'],
+                    ['copyright', 'Copyright'],
+                    ['moniker', 'Moniker'],
+                    ['release_date', 'Release date'],
+                ];
+                for (let [key, label] of fields) {
+                    if (d[key]) facts.push({ label, value: d[key] });
+                }
+                return facts;
+            },
+            detailsLinks(package_) {
+                let d = (package_ && package_.details) || {};
+                let links = [];
+                let fields = [
+                    ['homepage', 'Homepage'],
+                    ['publisher_url', 'Publisher'],
+                    ['publisher_support_url', 'Support'],
+                    ['privacy_url', 'Privacy'],
+                    ['license_url', 'License'],
+                    ['copyright_url', 'Copyright'],
+                    ['purchase_url', 'Purchase'],
+                    ['release_notes_url', 'Release notes'],
+                ];
+                for (let [key, label] of fields) {
+                    let url = this.safeUrl(d[key]);
+                    if (url) links.push({ label, url });
+                }
+                for (let doc of (d.documentations || [])) {
+                    let url = this.safeUrl(doc.url);
+                    if (url) links.push({ label: doc.label || 'Documentation', url });
+                }
+                return links;
+            },
+            versionReleaseNotes(package_, version) {
+                let vd = (package_ && package_.version_details) || {};
+                return (vd[version] && vd[version].release_notes) || null;
             },
             get totalPages() {
                 return Math.ceil(this.total / this.perPage);

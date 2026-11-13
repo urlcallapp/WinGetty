@@ -176,6 +176,11 @@ class PackageVersion(db.Model):
     default_locale = db.Column(db.String(50))
     package_locale = db.Column(db.String(50))
     short_description = db.Column(db.String(50))
+    # Optional catalog metadata carried over from the winget YAML manifest
+    # (description, license, homepage, tags, release notes, ...), sanitized
+    # on intake by wingetty_import.details_schema. NULL when the manifest
+    # provided none or the version predates this column.
+    details = db.Column(db.JSON, nullable=True)
     date_added = db.Column(db.DateTime, default=datetime.utcnow)
     installers = db.relationship("Installer", backref="package_version", lazy=True)
 
@@ -187,6 +192,7 @@ class PackageVersion(db.Model):
             "default_locale": self.default_locale,
             "package_locale": self.package_locale,
             "short_description": self.short_description,
+            "details": self.details,
             "date_added": self.date_added,
             "installers": [installer.to_dict() for installer in self.installers],
             "package_id": self.package.id,

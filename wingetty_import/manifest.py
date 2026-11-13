@@ -18,7 +18,33 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from .details_schema import sanitize_version_details
+
 MANIFEST_EXTENSIONS = (".yaml", ".yml")
+
+# Manifest keys collected into the catalog details object (locale and
+# version level). Everything passes through sanitize_version_details
+# before storage, so this only decides what is picked up.
+_DETAIL_KEYS = (
+    "Description",
+    "Author",
+    "License",
+    "LicenseUrl",
+    "Copyright",
+    "CopyrightUrl",
+    "Moniker",
+    "Tags",
+    "PackageUrl",
+    "PublisherUrl",
+    "PublisherSupportUrl",
+    "PrivacyUrl",
+    "ReleaseDate",
+    "ReleaseNotes",
+    "ReleaseNotesUrl",
+    "InstallationNotes",
+    "PurchaseUrl",
+    "Documentations",
+)
 
 
 class ManifestError(Exception):
@@ -55,6 +81,8 @@ class ImportPackage:
     locale: str = "en-US"
     short_description: str = ""
     installers: list = field(default_factory=list)
+    details: dict = field(default_factory=dict)
+    _raw_details: dict = field(default_factory=dict, repr=False)
 
     def validate(self):
         if not self.identifier:
@@ -169,12 +197,24 @@ def parse_manifest_documents(docs) -> ImportPackage:
             if isinstance(installer_doc, dict):
                 pkg.installers.append(_parse_installer(installer_doc))
 
+        # Locale and version level metadata for the catalog details view.
+        # Merged manifests nest the locale fields under DefaultLocale, so
+        # scan both levels. First value wins across documents.
+        sources = [doc]
+        if isinstance(doc.get("DefaultLocale"), dict):
+            sources.append(doc["DefaultLocale"])
+        for source in sources:
+            for key in _DETAIL_KEYS:
+                if key in source and key not in pkg._raw_details:
+                    pkg._raw_details[key] = source[key]
+
     if not saw_manifest:
         raise ManifestError("not a winget manifest")
     if not pkg.name:
         pkg.name = pkg.identifier
     if not pkg.publisher:
         pkg.publisher = pkg.identifier.split(".")[0] if pkg.identifier else ""
+    pkg.details = sanitize_version_details(pkg._raw_details)
     pkg.validate()
     return pkg
 

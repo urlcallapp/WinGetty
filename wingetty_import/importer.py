@@ -78,6 +78,8 @@ def scan_drop_dir(drop_dir):
                     existing.publisher = pkg.publisher
                 if not existing.short_description and pkg.short_description:
                     existing.short_description = pkg.short_description
+                for key, value in pkg.details.items():
+                    existing.details.setdefault(key, value)
             else:
                 groups[key] = {"pkg": pkg, "dir": root}
 
@@ -186,6 +188,8 @@ class LocalBackend:
             package_locale=pkg.locale,
             short_description=pkg.short_description or pkg.name,
         )
+        if pkg.details:
+            version.details = pkg.details
         self.db.session.add(version)
         self.db.session.commit()
 
@@ -319,9 +323,12 @@ class ApiBackend:
         resp.raise_for_status()
 
     def create_version(self, pkg: ImportPackage):
+        data = {"installer-version": pkg.version}
+        if pkg.details:
+            data["details"] = json.dumps(pkg.details)
         resp = self.session.post(
             f"{self.base_url}/api/package/{pkg.identifier}/add_version",
-            data={"installer-version": pkg.version},
+            data=data,
         )
         if resp.status_code == 409:
             return

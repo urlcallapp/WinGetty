@@ -11,6 +11,7 @@ from flask_login import current_user
 from sqlalchemy import or_
 
 from app.models import Package, PackageVersion, Setting, version_sort_key
+from wingetty_import.details_schema import sanitize_version_details
 
 catalog = Blueprint("catalog", __name__)
 
@@ -74,6 +75,14 @@ def packages():
         versions = [v for v in package.versions if v.installers]
         versions.sort(key=lambda v: version_sort_key(v.version_code), reverse=True)
         latest = versions[0]
+        # Details come from the imported winget YAML manifest and are
+        # re-sanitized on the way out (allowlist, http(s) URLs only) so the
+        # catalog UI can render them safely. version_details keys the same
+        # data per version for the versions view.
+        version_details = {}
+        for v in versions:
+            if v.details:
+                version_details[v.version_code] = sanitize_version_details(v.details)
         items.append(
             {
                 "identifier": package.identifier,
@@ -82,6 +91,8 @@ def packages():
                 "description": latest.short_description or package.name,
                 "latest_version": latest.version_code,
                 "versions": [v.version_code for v in versions],
+                "details": version_details.get(latest.version_code, {}),
+                "version_details": version_details,
                 "download_count": package.download_count,
             }
         )

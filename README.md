@@ -183,6 +183,16 @@ default; toggle it in Settings). Users see the available apps, copy the
 ready-made `winget install` command or click Install. The one-time source
 setup command is shown at the top of the page.
 
+Clicking an app card opens its details view: the long description, author,
+license, homepage and other links, tags, release notes and installation
+notes. This metadata comes from the app's winget YAML manifest
+(defaultLocale and version fields such as `Description`, `Author`,
+`License`, `PackageUrl`, `Tags`, `ReleaseNotes`); the importer and the
+REST API store it on the version when the YAML provides it. Manifest
+metadata is sanitized on intake - unknown fields are dropped and only
+`http(s)` URLs survive - and the details view shows whatever the manifest
+actually provided, nothing invented.
+
 Settings: `Enable user catalog`, `Catalog requires login`,
 `Catalog source name`, `Catalog install links`.
 

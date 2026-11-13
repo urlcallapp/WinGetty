@@ -35,6 +35,7 @@ from app.models import (
 from app.utils import InstallerError, create_installer, save_file, basedir, delete_installer_util
 from app.constants import installer_switches
 from wingetty_import.dependencies_schema import DependenciesError, validate_dependencies
+from wingetty_import.details_schema import sanitize_version_details
 
 api = Blueprint("api", __name__)
 s3_client = boto3.client("s3")
@@ -329,6 +330,17 @@ def add_version(identifier):
         short_description=package.name,
         identifier=identifier,
     )
+
+    # Optional catalog details, sent as a JSON string of winget manifest
+    # metadata; sanitized (allowlist + http(s) URLs only) before storage.
+    if request.form.get("details"):
+        try:
+            details = sanitize_version_details(json.loads(request.form["details"]))
+        except json.JSONDecodeError:
+            return jsonify({"error": "invalid details: not valid JSON"}), 400
+        if details:
+            version.details = details
+
     if (file or external_url) and version:
         current_app.logger.info("File and version found")
         if not current_user.role.has_permission("add:installer"):

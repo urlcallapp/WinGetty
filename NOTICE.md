@@ -49,15 +49,22 @@ New components added:
   suite and CI (pytest on Linux 3.10/3.11, Windows verification job,
   Docker build check without image publishing).
 - `docs/` - GitHub Pages landing page with video and static catalog demo.
+- `wingetty_import/details_schema.py` - catalog package-details
+  sanitization (allowlist, length caps, http(s)-only URLs); migration
+  a3f7c21e9b45 adds the `PackageVersion.details` JSON column. The
+  importer, REST `add_version` and the catalog endpoint carry manifest
+  metadata (Description, Author, License, PackageUrl, Tags,
+  ReleaseNotes, ...) into the card details view; the demo page
+  illustrates the same interaction.
 
 Upstream files modified (each carries a dated header notice):
 
 - `app/models.py` - packaging-based version parsing (LooseVersion removed,
-  Python 3.12 compatibility), `date_added` default fixed.
+  Python 3.12 compatibility), `date_added` default fixed, `details` column.
 - `app/api_routes.py` - installer lookup scoped to the owning package
   version (wrong-package attachment fixed), `file or external_url and
   version` precedence fixed, 409 on duplicate add, InstallerError handling,
-  debug print removed.
+  debug print removed, optional `details` intake on `add_version`.
 - `app/forms.py` - empty select choices no longer block package/version
   creation without installers.
 - `app/utils.py` - InstallerError propagation, nested empty-string handling.

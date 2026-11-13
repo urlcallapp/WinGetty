@@ -33,9 +33,10 @@
     <div class="flex flex-col gap-y-6">
 
         <div class="bg-blue-100/80 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100 rounded-2xl p-4 text-sm">
-            This is a static demo of the WinGetty end-user catalog with a small fictitious catalog. Search, filtering
-            and the version view work; install buttons and commands are for illustration only and do not install
-            anything.
+            This is a static demo of the WinGetty end-user catalog with a small fictitious catalog. Search, the
+            card details view and the version view work; install buttons and commands are for illustration only and
+            do not install anything. In a real deployment the details shown on a card come from the app's imported
+            winget YAML manifest.
         </div>
 
         <!-- Header -->
@@ -44,7 +45,7 @@
             <div>
                 <h1 class="text-3xl font-medium text-gray-800 dark:text-gray-200">WinGetty app catalog</h1>
                 <p class="text-gray-500 dark:text-gray-400">Browse the apps available on this private winget source and
-                    install them with winget.</p>
+                    install them with winget. Click a card for more details.</p>
             </div>
         </div>
 
@@ -85,7 +86,11 @@
         <!-- Package cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="!loading" x-cloak>
             <template x-for="package in packages" :key="package.identifier">
-                <div class="bg-white dark:bg-neutral-900 rounded-2xl shadow p-4 flex flex-col gap-y-3">
+                <div class="bg-white dark:bg-neutral-900 rounded-2xl shadow p-4 flex flex-col gap-y-3 cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring focus:ring-blue-300 focus:ring-opacity-50"
+                    role="button" tabindex="0" :aria-label="'Show details for ' + package.name"
+                    @click="detailsPkg = package"
+                    @keydown.enter.prevent="detailsPkg = package"
+                    @keydown.space.prevent="detailsPkg = package">
                     <div class="flex items-start justify-between gap-x-2">
                         <div class="min-w-0">
                             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate"
@@ -98,7 +103,7 @@
                             x-text="'v' + package.latest_version"></span>
                     </div>
                     <p class="text-sm text-gray-600 dark:text-gray-300" x-text="package.description"></p>
-                    <div class="flex items-center gap-2 mt-auto flex-wrap">
+                    <div class="flex items-center gap-2 mt-auto flex-wrap" @click.stop>
                         <button type="button" @click="demoNotice()"
                             class="flex items-center justify-center px-3 py-1.5 text-sm text-white transition-colors duration-300 bg-blue-600 rounded-lg gap-x-2 hover:bg-blue-500">
                             <svg class="h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -117,7 +122,7 @@
                             </svg>
                             <span>Copy command</span>
                         </button>
-                        <button type="button" @click="selected = package"
+                        <button type="button" @click.stop="selected = package"
                             class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 hover:underline">
                             Versions
                         </button>
@@ -129,6 +134,104 @@
         <div x-show="!loading && packages.length === 0" x-cloak
             class="text-center text-gray-500 dark:text-gray-400 py-10">
             No apps found.
+        </div>
+
+        <!-- Details modal (clicking a card) -->
+        <div x-cloak x-show="detailsPkg !== null" @keydown.escape.window="detailsPkg = null"
+            class="fixed top-0 left-0 right-0 z-50 w-full p-4 overflow-x-hidden overflow-y-auto md:inset-0 h-full max-h-full dark:bg-neutral-700/40 flex justify-center items-center bg-neutral-900/30">
+            <div class="relative w-full max-w-lg" @click.away="detailsPkg = null">
+                <div class="relative bg-white rounded-2xl shadow dark:bg-neutral-900 p-4 flex flex-col gap-y-3 max-h-[85vh] overflow-y-auto"
+                    role="dialog" aria-modal="true" :aria-label="detailsPkg ? 'Details for ' + detailsPkg.name : ''">
+                    <div class="flex items-start justify-between gap-x-2">
+                        <div class="min-w-0">
+                            <h3 class="text-xl font-semibold text-gray-900 dark:text-white"
+                                x-text="detailsPkg ? detailsPkg.name : ''"></h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400"
+                                x-text="detailsPkg ? detailsPkg.publisher + ' · ' + detailsPkg.identifier + ' · v' + detailsPkg.latest_version : ''">
+                            </p>
+                        </div>
+                        <button type="button" @click="detailsPkg = null" aria-label="Close details"
+                            class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center dark:hover:bg-gray-600 dark:hover:text-white shrink-0">
+                            <svg aria-hidden="true" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd"
+                                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293-4.293a1 1 0 01-1.414-1.414L10 4.293 5.707 4.293 4.293 4.293z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <p class="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                        x-text="detailsPkg ? (detailsPkg.details.description || detailsPkg.description) : ''"></p>
+
+                    <div class="flex flex-wrap gap-2" x-show="detailsPkg && detailsPkg.details.tags">
+                        <template x-for="tag in (detailsPkg && detailsPkg.details.tags ? detailsPkg.details.tags : [])"
+                            :key="tag">
+                            <span
+                                class="px-2 py-0.5 text-xs rounded-full bg-blue-100/70 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200"
+                                x-text="tag"></span>
+                        </template>
+                    </div>
+
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2"
+                        x-show="detailsPkg && detailsFacts(detailsPkg).length > 0">
+                        <template x-for="fact in (detailsPkg ? detailsFacts(detailsPkg) : [])" :key="fact.label">
+                            <div class="bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                                <dt class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                                    x-text="fact.label"></dt>
+                                <dd class="text-sm text-gray-800 dark:text-gray-200 break-words"
+                                    x-text="fact.value"></dd>
+                            </div>
+                        </template>
+                    </dl>
+
+                    <div class="flex flex-wrap gap-2" x-show="detailsPkg && detailsLinks(detailsPkg).length > 0">
+                        <template x-for="link in (detailsPkg ? detailsLinks(detailsPkg) : [])" :key="link.label">
+                            <a :href="link.url" target="_blank" rel="noopener noreferrer"
+                                class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:underline"
+                                x-text="link.label"></a>
+                        </template>
+                    </div>
+
+                    <template x-if="detailsPkg && detailsPkg.details.installation_notes">
+                        <details class="text-sm bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                            <summary class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">
+                                Installation notes</summary>
+                            <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                                x-text="detailsPkg ? detailsPkg.details.installation_notes : ''"></p>
+                        </details>
+                    </template>
+
+                    <template x-if="detailsPkg && detailsPkg.details.release_notes">
+                        <details class="text-sm bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
+                            <summary class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">Release
+                                notes</summary>
+                            <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                                x-text="detailsPkg ? detailsPkg.details.release_notes : ''"></p>
+                        </details>
+                    </template>
+
+                    <p class="text-xs text-gray-400 dark:text-gray-500"
+                        x-text="detailsPkg ? 'Details from the winget manifest of version ' + detailsPkg.latest_version : ''">
+                    </p>
+
+                    <div class="flex items-center gap-2 flex-wrap border-t border-gray-100 dark:border-neutral-800 pt-3">
+                        <button type="button" @click="demoNotice()"
+                            class="flex items-center justify-center px-3 py-1.5 text-sm text-white transition-colors duration-300 bg-blue-600 rounded-lg gap-x-2 hover:bg-blue-500">
+                            <span>Install</span>
+                        </button>
+                        <button type="button"
+                            @click="detailsPkg && copy(installCommand(detailsPkg), 'Install command copied')"
+                            class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-neutral-800 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-700">
+                            Copy command
+                        </button>
+                        <button type="button" @click="selected = detailsPkg; detailsPkg = null"
+                            class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-300 hover:underline">
+                            All versions
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Versions modal -->
@@ -150,18 +253,28 @@
                         </button>
                     </div>
                     <template x-for="version in (selected ? selected.versions : [])" :key="version">
-                        <div
-                            class="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2">
-                            <span class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1"
-                                x-text="'Version ' + version"></span>
-                            <div class="flex gap-2">
-                                <button type="button" @click="demoNotice()"
-                                    class="px-3 py-1 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-300">Install</button>
-                                <button type="button"
-                                    @click="copy(installCommand(selected, version), 'Install command copied')"
-                                    class="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-neutral-800 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors duration-300">Copy
-                                    command</button>
+                        <div class="bg-gray-50 dark:bg-neutral-950 rounded-lg px-3 py-2 flex flex-col gap-y-2">
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1"
+                                    x-text="'Version ' + version"></span>
+                                <div class="flex gap-2">
+                                    <button type="button" @click="demoNotice()"
+                                        class="px-3 py-1 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-300">Install</button>
+                                    <button type="button"
+                                        @click="copy(installCommand(selected, version), 'Install command copied')"
+                                        class="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-neutral-800 rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors duration-300">Copy
+                                        command</button>
+                                </div>
                             </div>
+                            <template x-if="selected && versionReleaseNotes(selected, version)">
+                                <details class="text-sm">
+                                    <summary
+                                        class="cursor-pointer text-blue-600 dark:text-blue-300 hover:underline">
+                                        Release notes</summary>
+                                    <p class="mt-1 text-gray-600 dark:text-gray-300 whitespace-pre-line"
+                                        x-text="selected ? versionReleaseNotes(selected, version) : ''"></p>
+                                </details>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -176,16 +289,55 @@
 </main>
 
 <script>
+    // Fictitious sample data in the same shape the real catalog API returns,
+    // including the per-version details imported from winget YAML manifests.
     const DEMO_PACKAGES = [
-        { identifier: '7zip.7zip', name: '7-Zip', publisher: 'Igor Pavlov', description: 'File archiver with a high compression ratio.', latest_version: '24.08', versions: ['24.08'], download_count: 182 },
-        { identifier: 'VideoLAN.VLC', name: 'VLC media player', publisher: 'VideoLAN', description: 'Free and open source media player.', latest_version: '3.0.21', versions: ['3.0.21'], download_count: 143 },
-        { identifier: 'Mozilla.Firefox', name: 'Mozilla Firefox', publisher: 'Mozilla', description: 'Fast, private and safe web browser.', latest_version: '132.0.2', versions: ['132.0.2'], download_count: 121 },
-        { identifier: 'Notepad++.Notepad++', name: 'Notepad++', publisher: 'Don Ho', description: 'Free source code editor for Windows.', latest_version: '8.7.1', versions: ['8.7.1'], download_count: 98 },
-        { identifier: 'Git.Git', name: 'Git', publisher: 'The Git Development Community', description: 'Distributed version control system.', latest_version: '2.47.0', versions: ['2.47.0'], download_count: 97 },
-        { identifier: 'Microsoft.VisualStudioCode', name: 'Visual Studio Code', publisher: 'Microsoft', description: 'Lightweight but powerful source code editor.', latest_version: '1.95.2', versions: ['1.95.2'], download_count: 88 },
-        { identifier: 'PuTTY.PuTTY', name: 'PuTTY', publisher: 'Simon Tatham', description: 'SSH and telnet client.', latest_version: '0.81', versions: ['0.81'], download_count: 54 },
-        { identifier: 'GIMP.GIMP', name: 'GIMP', publisher: 'The GIMP Team', description: 'GNU Image Manipulation Program.', latest_version: '2.10.38', versions: ['2.10.38'], download_count: 41 },
-        { identifier: 'Audacity.Audacity', name: 'Audacity', publisher: 'Audacity Team', description: 'Free, open source audio editor and recorder.', latest_version: '3.6.4', versions: ['3.6.4'], download_count: 33 },
+        {
+            identifier: '7zip.7zip', name: '7-Zip', publisher: 'Igor Pavlov',
+            description: 'File archiver with a high compression ratio.',
+            latest_version: '24.08', versions: ['24.08'], download_count: 182,
+            details: {
+                description: '7-Zip is a file archiver with a high compression ratio. It supports 7z, ZIP, GZIP, BZIP2, TAR and many other formats, and integrates with the Windows shell.',
+                author: 'Igor Pavlov', license: 'GNU LGPL', copyright: 'Copyright (c) 1999-2024 Igor Pavlov',
+                homepage: 'https://www.7-zip.org/', license_url: 'https://www.7-zip.org/license.txt',
+                tags: ['archiver', 'compression', 'zip', '7z'],
+                release_notes: '24.08 fixes a regression in 24.07 that could corrupt certain squashfs extractions and updates translations.',
+            },
+            version_details: {
+                '24.08': { release_notes: '24.08 fixes a regression in 24.07 that could corrupt certain squashfs extractions and updates translations.' },
+            },
+        },
+        {
+            identifier: 'VideoLAN.VLC', name: 'VLC media player', publisher: 'VideoLAN',
+            description: 'Free and open source media player.',
+            latest_version: '3.0.21', versions: ['3.0.21'], download_count: 143,
+            details: {
+                description: 'VLC is a free and open source cross-platform multimedia player and framework that plays most multimedia files, and various streaming protocols.',
+                license: 'GPL-2.0-or-later', homepage: 'https://www.videolan.org/vlc/',
+                publisher_url: 'https://www.videolan.org/', privacy_url: 'https://www.videolan.org/privacy.html',
+                tags: ['media-player', 'video', 'audio', 'streaming'],
+                release_notes_url: 'https://www.videolan.org/developers/vlc-branch/NEWS',
+            },
+            version_details: {},
+        },
+        {
+            identifier: 'Mozilla.Firefox', name: 'Mozilla Firefox', publisher: 'Mozilla',
+            description: 'Fast, private and safe web browser.',
+            latest_version: '132.0.2', versions: ['132.0.2'], download_count: 121,
+            details: {
+                license: 'MPL-2.0', homepage: 'https://www.mozilla.org/firefox/',
+                privacy_url: 'https://www.mozilla.org/privacy/firefox/',
+                tags: ['browser', 'web'],
+                installation_notes: 'The installer requires a restart of running Firefox instances.',
+            },
+            version_details: {},
+        },
+        { identifier: 'Notepad++.Notepad++', name: 'Notepad++', publisher: 'Don Ho', description: 'Free source code editor for Windows.', latest_version: '8.7.1', versions: ['8.7.1'], download_count: 98, details: {}, version_details: {} },
+        { identifier: 'Git.Git', name: 'Git', publisher: 'The Git Development Community', description: 'Distributed version control system.', latest_version: '2.47.0', versions: ['2.47.0'], download_count: 97, details: {}, version_details: {} },
+        { identifier: 'Microsoft.VisualStudioCode', name: 'Visual Studio Code', publisher: 'Microsoft', description: 'Lightweight but powerful source code editor.', latest_version: '1.95.2', versions: ['1.95.2'], download_count: 88, details: {}, version_details: {} },
+        { identifier: 'PuTTY.PuTTY', name: 'PuTTY', publisher: 'Simon Tatham', description: 'SSH and telnet client.', latest_version: '0.81', versions: ['0.81'], download_count: 54, details: {}, version_details: {} },
+        { identifier: 'GIMP.GIMP', name: 'GIMP', publisher: 'The GIMP Team', description: 'GNU Image Manipulation Program.', latest_version: '2.10.38', versions: ['2.10.38'], download_count: 41, details: {}, version_details: {} },
+        { identifier: 'Audacity.Audacity', name: 'Audacity', publisher: 'Audacity Team', description: 'Free, open source audio editor and recorder.', latest_version: '3.6.4', versions: ['3.6.4'], download_count: 33, details: {}, version_details: {} },
     ];
 
     document.addEventListener('alpine:init', () => {
@@ -194,6 +346,7 @@
             search: '',
             loading: true,
             selected: null,
+            detailsPkg: null,
             notice: '',
             sourceName: 'WinGetty',
             sourceAddCommand: 'winget source add -n WinGetty -t "Microsoft.Rest" -a https://wingetty.example.com/wg/',
@@ -212,6 +365,52 @@
                 let cmd = `winget install --exact --id ${package_.identifier} --source ${this.sourceName}`;
                 if (version) cmd += ` --version ${version}`;
                 return cmd;
+            },
+            // Only http(s) URLs may become links; everything else is dropped.
+            safeUrl(url) {
+                return (typeof url === 'string' && /^https?:\/\//i.test(url)) ? url : null;
+            },
+            detailsFacts(package_) {
+                let d = (package_ && package_.details) || {};
+                let facts = [];
+                let fields = [
+                    ['author', 'Author'],
+                    ['license', 'License'],
+                    ['copyright', 'Copyright'],
+                    ['moniker', 'Moniker'],
+                    ['release_date', 'Release date'],
+                ];
+                for (let [key, label] of fields) {
+                    if (d[key]) facts.push({ label, value: d[key] });
+                }
+                return facts;
+            },
+            detailsLinks(package_) {
+                let d = (package_ && package_.details) || {};
+                let links = [];
+                let fields = [
+                    ['homepage', 'Homepage'],
+                    ['publisher_url', 'Publisher'],
+                    ['publisher_support_url', 'Support'],
+                    ['privacy_url', 'Privacy'],
+                    ['license_url', 'License'],
+                    ['copyright_url', 'Copyright'],
+                    ['purchase_url', 'Purchase'],
+                    ['release_notes_url', 'Release notes'],
+                ];
+                for (let [key, label] of fields) {
+                    let url = this.safeUrl(d[key]);
+                    if (url) links.push({ label, url });
+                }
+                for (let doc of (d.documentations || [])) {
+                    let url = this.safeUrl(doc.url);
+                    if (url) links.push({ label: doc.label || 'Documentation', url });
+                }
+                return links;
+            },
+            versionReleaseNotes(package_, version) {
+                let vd = (package_ && package_.version_details) || {};
+                return (vd[version] && vd[version].release_notes) || null;
             },
             async copy(text, message) {
                 try {
