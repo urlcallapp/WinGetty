@@ -64,5 +64,5 @@ New-ItemProperty -Path $baseKey -Name 'URL Protocol' -PropertyType String -Value
 New-Item -Path "$baseKey\shell\open\command" -Force | Out-Null
 Set-ItemProperty -Path "$baseKey\shell\open\command" -Name '(Default)' -Value $command
 
-Write-Host "Registered $Scheme:// for source '$SourceName' (current user)."
+Write-Host "Registered ${Scheme}:// for source '$SourceName' (current user)."
 Write-Host 'Test it by opening the WinGetty catalog and clicking Install on any app.'

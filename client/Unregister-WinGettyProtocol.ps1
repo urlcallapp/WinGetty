@@ -12,9 +12,9 @@ param(
 $baseKey = "HKCU:\Software\Classes\$Scheme"
 if (Test-Path $baseKey) {
     Remove-Item -Path $baseKey -Recurse -Force
-    Write-Host "Removed $Scheme:// protocol registration (current user)."
+    Write-Host "Removed ${Scheme}:// protocol registration (current user)."
 } else {
-    Write-Host "Nothing to remove: $Scheme:// is not registered."
+    Write-Host "Nothing to remove: ${Scheme}:// is not registered."
 }
 
 $configPath = Join-Path $PSScriptRoot 'wingetty-protocol.json'
