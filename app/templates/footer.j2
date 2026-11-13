@@ -1,3 +1,6 @@
+<!-- Modified 2026-11-13 (urlcallapp/WinGetty fork): added prominent AGPL source-offer link. -->
 <footer class=" text-white text-center text-sm py-2 ">
-    <p class="dark:text-gray-400 text-gray-600">v{{ config['VERSION'] }} - &copy; {{now.year}} Thilo Jaeggi</p>
+    <p class="dark:text-gray-400 text-gray-600">v{{ config['VERSION'] }} - &copy; {{now.year}} Thilo Jaeggi
+        - <a class="underline hover:text-gray-800 dark:hover:text-gray-200" href="{{ url_for('source.index') }}">Source code (AGPL-3.0)</a>
+    </p>
 </footer>

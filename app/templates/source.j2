@@ -1,0 +1,61 @@
+{% extends "base.j2" %}
+{% set alpine_data = '{}' %}
+{% block content %}
+<div class="max-w-3xl mx-auto w-full bg-white dark:bg-zinc-900 rounded-xl shadow p-6 sm:p-8 flex flex-col gap-5">
+    <div>
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Source code</h1>
+        <p class="mt-2 text-gray-700 dark:text-gray-300">
+            This server runs WinGetty, free software licensed under the
+            <a class="text-blue-600 dark:text-blue-400 underline" href="https://www.gnu.org/licenses/agpl-3.0.html">GNU Affero General Public License v3.0</a> (AGPL-3.0).
+            Original work &copy; Thilo Jaeggi. The copyright and license notices are preserved
+            in every copy; see <code class="text-sm">LICENSE.md</code> in the source.
+        </p>
+    </div>
+
+    <div class="border border-gray-200 dark:border-zinc-700 rounded-lg p-4">
+        <h2 class="font-semibold text-gray-900 dark:text-gray-100">Get the corresponding source</h2>
+        <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            The archive below contains the complete corresponding source of the software running on
+            <em>this</em> server, served by the server itself, so it also works on networks without
+            internet access.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-3">
+            {% if archive_available %}
+            <a href="{{ url_for('source.archive') }}"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4"/>
+                </svg>
+                Download source archive
+            </a>
+            {% else %}
+            <p class="text-sm text-amber-700 dark:text-amber-400">
+                This deployment did not include a source archive. Ask the operator to provide the
+                corresponding source, or use the repository link below when you have internet access.
+                Operators: run <code class="text-xs">scripts/build-source-archive.sh</code> and redeploy
+                (the provided Dockerfile does this automatically).
+            </p>
+            {% endif %}
+            <a href="{{ repository_url }}"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-gray-900 dark:text-gray-100 text-sm font-medium">
+                Repository (requires internet)
+            </a>
+        </div>
+    </div>
+
+    <div class="border border-gray-200 dark:border-zinc-700 rounded-lg p-4">
+        <h2 class="font-semibold text-gray-900 dark:text-gray-100">Modifications</h2>
+        <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            This deployment is based on the upstream project
+            <a class="text-blue-600 dark:text-blue-400 underline" href="{{ upstream_url }}">thilojaeggi/WinGetty</a>
+            and contains modifications dated <strong>2026-11-13</strong>:
+            automated winget-download YAML/artifact import (<code class="text-xs">wingetty_import/</code>),
+            a public end-user catalog (<code class="text-xs">/catalog</code>),
+            a safe <code class="text-xs">wingetty://</code> install-protocol client (<code class="text-xs">client/</code>),
+            this source-offer page, and bug fixes in package/version/installer handling.
+            Modified files carry a dated notice in their header; see
+            <code class="text-xs">NOTICE.md</code> in the source for the full list.
+        </p>
+    </div>
+</div>
+{% endblock %}

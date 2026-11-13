@@ -162,3 +162,4 @@ dist
 .pnp.*
 # Ignore dynaconf secret files
 .secrets.*
+source-archive/

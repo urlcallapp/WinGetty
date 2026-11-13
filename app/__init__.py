@@ -100,11 +100,13 @@ def create_app():
     from app.auth_routes import auth
     from app.winget_routes import winget
     from app.catalog_routes import catalog
+    from app.source_routes import source
 
     app.register_blueprint(ui)
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(winget, url_prefix='/wg')
     app.register_blueprint(catalog, url_prefix='/catalog')
+    app.register_blueprint(source, url_prefix='/source')
     app.register_blueprint(auth)
 
     app.jinja_env.filters['sort_versions'] = sort_versions

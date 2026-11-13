@@ -1,3 +1,4 @@
+# Modified 2026-11-13 (urlcallapp/WinGetty fork): see NOTICE.md for the list of changes.
 
 import os
 from flask import Blueprint, jsonify, render_template, request, redirect, url_for, current_app, send_from_directory, flash

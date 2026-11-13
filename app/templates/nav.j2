@@ -1,3 +1,4 @@
+{# Modified 2026-11-13 (urlcallapp/WinGetty fork): catalog navigation link; see NOTICE.md #}
 <nav x-data="{ menuVisible: window.innerWidth > 768 }" @click.away="if(window.innerWidth < 768) menuVisible = false"
     class="flex items-center justify-between flex-wrap sm:flex-row bg-white dark:bg-zinc-900 text-neutral-700 dark:text-neutral-100	 p-4 drop-shadow-md sticky top-0 z-10">
     <a href="{{ url_for('ui.index') }}">

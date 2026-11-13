@@ -181,6 +181,20 @@ npm ci && npm run build:css   # rebuild the Tailwind CSS
 
 Tests also run in GitHub Actions on every push and pull request.
 
+### 📜 License and source availability
+
+WinGetty is licensed under the [AGPL-3.0](LICENSE.md); original work
+© Thilo Jaeggi, with modifications dated 2026-11-13 listed in
+[NOTICE.md](NOTICE.md). Because users interact with WinGetty over a
+network, every running instance offers its corresponding source at
+`/source` (linked from the footer of every page, no login required).
+The page also serves a source archive from the server itself at
+`/source/archive`, which keeps the offer working on air-gapped networks
+where users cannot reach GitHub. The Dockerfile builds this archive
+automatically at image build time; on a manual deployment run
+`scripts/build-source-archive.sh` after each update. The archive contains
+a `SOURCE_VERSION` file with the exact revision it was built from.
+
 <hr>
     <a href="https://github.com/thilojaeggi/WinGetty/issues">Report Issue</a>
     ·

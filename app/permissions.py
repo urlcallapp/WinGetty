@@ -1,3 +1,4 @@
+# Modified 2026-11-13 (urlcallapp/WinGetty fork): see NOTICE.md for the list of changes.
 from flask import current_app
 from app.models import Permission, Role, User
 from app import db

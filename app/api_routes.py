@@ -1,3 +1,4 @@
+# Modified 2026-11-13 (urlcallapp/WinGetty fork): see NOTICE.md for the list of changes.
 import os
 import boto3
 from flask import (
