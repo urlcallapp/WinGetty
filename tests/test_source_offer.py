@@ -28,9 +28,13 @@ def test_footer_links_source_offer(client):
     assert 'href="/source/"' in resp.get_data(as_text=True)
 
 
-def test_archive_404_when_missing(client):
-    resp = client.get("/source/archive")
-    assert resp.status_code == 404
+def test_archive_404_when_missing(client, app, tmp_path):
+    app.config["SOURCE_ARCHIVE_PATH"] = str(tmp_path / "absent.tar.gz")
+    try:
+        resp = client.get("/source/archive")
+        assert resp.status_code == 404
+    finally:
+        app.config.pop("SOURCE_ARCHIVE_PATH", None)
 
 
 def test_archive_served_when_present(client, app, tmp_path):
